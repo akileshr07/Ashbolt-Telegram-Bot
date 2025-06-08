@@ -12,7 +12,8 @@ from telegram.ext import (
 
 # ✅ Bot Configuration
 # BOT_TOKEN = '7450203515:AAELHiVt6RZaamy0Q9oyTnq6ZWjHFdHFZUY'
-BOT_TOKEN = os.getenv('7450203515:AAELHiVt6RZaamy0Q9oyTnq6ZWjHFdHFZUY')
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+)
 
 ADMIN_ID = 1774865778
 UPI_ID = '6382344469@jio'
