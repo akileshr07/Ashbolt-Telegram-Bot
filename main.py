@@ -1,7 +1,3 @@
-# ✅ STEP 1: Install required library
-# !pip install python-telegram-bot==13.15
-
-# ✅ STEP 2: Imports & Config
 import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -10,10 +6,12 @@ from telegram.ext import (
     Filters, CallbackContext, CallbackQueryHandler
 )
 
-# ✅ Bot Configuration
-# BOT_TOKEN = '7450203515:AAELHiVt6RZaamy0Q9oyTnq6ZWjHFdHFZUY'
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-)
+BOT_TOKEN = os.getenv('BOT_TOKEN')  # ✅ Correct way to get token from environment
+
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is missing! Make sure to set it in Render's environment variables.")
+
+
 
 ADMIN_ID = 1774865778
 UPI_ID = '6382344469@jio'
