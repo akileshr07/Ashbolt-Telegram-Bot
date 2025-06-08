@@ -2,10 +2,13 @@
 # !pip install python-telegram-bot==13.15
 
 # ✅ STEP 2: Imports & Config
+import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
-import os
+from telegram.ext import (
+    Updater, CommandHandler, MessageHandler,
+    Filters, CallbackContext, CallbackQueryHandler
+)
 
 # ✅ Bot Configuration
 # BOT_TOKEN = '7450203515:AAELHiVt6RZaamy0Q9oyTnq6ZWjHFdHFZUY'
