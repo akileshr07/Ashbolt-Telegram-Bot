@@ -5,9 +5,12 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
+import os
 
 # ✅ Bot Configuration
-BOT_TOKEN = '7450203515:AAELHiVt6RZaamy0Q9oyTnq6ZWjHFdHFZUY'
+# BOT_TOKEN = '7450203515:AAELHiVt6RZaamy0Q9oyTnq6ZWjHFdHFZUY'
+BOT_TOKEN = os.getenv('7450203515:AAELHiVt6RZaamy0Q9oyTnq6ZWjHFdHFZUY')
+
 ADMIN_ID = 1774865778
 UPI_ID = '6382344469@jio'
 
