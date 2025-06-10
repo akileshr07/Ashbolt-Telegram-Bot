@@ -4,29 +4,32 @@ from flask import Flask, request
 from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Dispatcher, CallbackContext, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 
-# Config
+# === Environment Configuration ===
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = int(os.getenv('ADMIN_ID', 1774865778))  # Or hardcode
+ADMIN_ID = int(os.getenv('ADMIN_ID', 1774865778))
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Example: https://ashbolt-bot.onrender.com
 UPI_ID = '6382344469@jio'
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # eg. https://yourapp.onrender.com
 
-bot = Bot(token=BOT_TOKEN)
+if not BOT_TOKEN or not WEBHOOK_URL:
+    raise RuntimeError("❌ BOT_TOKEN and WEBHOOK_URL must be set in environment variables!")
 
-# Setup Flask
+# === Init Flask App and Telegram Bot ===
 app = Flask(__name__)
+bot = Bot(token=BOT_TOKEN)
+dispatcher = Dispatcher(bot=bot, update_queue=None, workers=0, use_context=True)
 
-# Setup logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# === Logging Setup ===
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-# State management
+# === User State Management ===
 user_state = {}
 user_screenshot_counter = {}
 payment_proofs = {}
 
-# Setup dispatcher globally
-dispatcher = Dispatcher(bot=bot, update_queue=None, workers=0)
-
-# /start command
+# === Command and Message Handlers ===
 def start(update: Update, context: CallbackContext):
     user = update.message.from_user
     keyboard = [[InlineKeyboardButton("🔥 Buy Course At Just ₹29", callback_data='buy')]]
@@ -35,7 +38,6 @@ def start(update: Update, context: CallbackContext):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# Buy button & steps
 def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
     user_id = query.message.chat_id
@@ -51,23 +53,19 @@ def button_handler(update: Update, context: CallbackContext):
             "📲 Join Channel: https://t.me/+IEY3uiiKHfU4NzQ1\n"
             "❓ Contact admin 👉 @iam_akilesh07"
         )
-
         context.bot.send_photo(
             chat_id=user_id,
             photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
             caption=(
-                "💻 *Namaste React Course by Akshay Saini – Just $0.35 / ₹29!*\n\n"
+                "💻 *Namaste React Course by Akshay Saini – Just ₹29!*\n"
                 "🎯 50+ Hours of Project-Based Learning\n"
-                "🚀 Includes 3 Major Projects + Interview Prep\n"
-                "✅ Covers Latest React JS Concepts (Hooks, Redux, Routing, etc.)\n"
-                "👨‍💻 Perfect for Beginners & Experienced Developers\n\n"
-                "🔗 Join Now 👉 https://t.me/ashbolt_bot\n"
-                "📲 Or Search \"ashbolt_bot\" on Telegram\n\n"
-                "🌟 One-Time Access • Learn at Your Own Pace"
+                "✅ Covers React, Hooks, Redux, Routing\n"
+                "👨‍💻 For Beginners & Experienced Devs\n"
+                "🔗 https://t.me/ashbolt_bot\n"
+                "🌟 Lifetime Access"
             ),
             parse_mode='Markdown'
         )
-
         context.bot.send_message(
             chat_id=user_id,
             text="👇 Submit your 3 screenshots 👇",
@@ -83,25 +81,19 @@ def button_handler(update: Update, context: CallbackContext):
 
     elif query.data == 'send_receipt':
         user_state[user_id] = "awaiting_payment"
-        context.bot.send_message(
-            chat_id=user_id,
-            text="📥 Send your ₹29 UPI payment screenshot now.\n⚠️ Fake UTRs will be banned!"
-        )
+        context.bot.send_message(chat_id=user_id, text="📥 Send your ₹29 UPI payment screenshot.\n⚠️ Fake UTRs will be banned.")
 
     elif query.data.startswith("approve_"):
         target_id = int(query.data.split("_")[1])
-        context.bot.send_message(
-            chat_id=target_id,
-            text="✅ Payment Approved!\n🎓 Course link: https://1024terabox.com/s/1F_FRmqIs_1HpALb7zUlM0g\n🔑 Password: 7878"
-        )
-        context.bot.send_message(chat_id=ADMIN_ID, text=f"✅ You approved access for user: {target_id}")
+        context.bot.send_message(chat_id=target_id,
+                                 text="✅ Payment Approved!\n🎓 Course Link: https://1024terabox.com/s/1F_FRmqIs_1HpALb7zUlM0g\n🔑 Password: 7878")
+        context.bot.send_message(chat_id=ADMIN_ID, text=f"✅ Approved access for user ID: {target_id}")
 
     elif query.data.startswith("reject_"):
         target_id = int(query.data.split("_")[1])
         context.bot.send_message(chat_id=target_id, text="❌ Payment not accepted. Please try again.")
-        context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ You rejected access for user: {target_id}")
+        context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ Rejected access for user ID: {target_id}")
 
-# Photo upload handler
 def handle_photos(update: Update, context: CallbackContext):
     user_id = update.message.chat_id
 
@@ -113,7 +105,7 @@ def handle_photos(update: Update, context: CallbackContext):
             user_state[user_id] = "waiting_payment"
             context.bot.send_message(
                 chat_id=user_id,
-                text=f"✅ All 3 screenshots received!\n\n💸 Pay ₹29 to: *{UPI_ID}*",
+                text=f"✅ All 3 screenshots received!\n💸 Pay ₹29 to: *{UPI_ID}*",
                 parse_mode='Markdown'
             )
             context.bot.send_photo(
@@ -141,7 +133,7 @@ def handle_photos(update: Update, context: CallbackContext):
         ])
         context.bot.send_message(
             chat_id=ADMIN_ID,
-            text=f"👤 Payment received from user ID: {user_id}\nReview and take action.",
+            text=f"👤 Payment received from user ID: {user_id}",
             reply_markup=keyboard
         )
         context.bot.send_message(
@@ -149,34 +141,21 @@ def handle_photos(update: Update, context: CallbackContext):
             text="📤 Payment screenshot sent to admin for review.\nPlease wait for approval."
         )
 
-# Document fallback
 def handle_documents(update: Update, context: CallbackContext):
     file = update.message.document
     if file.mime_type in ['image/jpeg', 'image/png']:
         update.message.photo = [file]
         handle_photos(update, context)
     else:
-        context.bot.send_message(chat_id=update.message.chat_id, text="❌ Unsupported file format. Only JPG/PNG allowed.")
+        context.bot.send_message(chat_id=update.message.chat_id, text="❌ Only JPG/PNG images are supported.")
 
 def submit_command(update: Update, context: CallbackContext):
-    update.message.reply_text("📤 Tap the Submit Screenshots button to begin.")
+    update.message.reply_text("📤 Tap the 'Submit Screenshots' button to begin.")
 
 def unknown_command(update: Update, context: CallbackContext):
-    update.message.reply_text("❌ Unknown command. Please use /start or menu buttons.")
+    update.message.reply_text("❌ Unknown command. Please use /start or buttons.")
 
-# Telegram webhook handler
-@app.route(f'/{BOT_TOKEN}', methods=['POST'])
-def telegram_webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    dispatcher.process_update(update)
-    return 'OK'
-
-# Healthcheck (ping)
-@app.route('/')
-def index():
-    return "AshBolt Bot is Alive!"
-
-# Register handlers
+# === Register Handlers ===
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CommandHandler("submit", submit_command))
 dispatcher.add_handler(CallbackQueryHandler(button_handler))
@@ -184,12 +163,23 @@ dispatcher.add_handler(MessageHandler(Filters.photo, handle_photos))
 dispatcher.add_handler(MessageHandler(Filters.document, handle_documents))
 dispatcher.add_handler(MessageHandler(Filters.command, unknown_command))
 
-# Run Flask server
-if __name__ == '__main__':
-    if not WEBHOOK_URL:
-        raise RuntimeError("❌ Set WEBHOOK_URL in Render Environment Variables.")
+# === Webhook Endpoint ===
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return "OK", 200
 
-    # Set webhook
+# === Health Check ===
+@app.route("/", methods=["GET"])
+def home():
+    return "🤖 AshBolt Bot is running via webhook!", 200
+
+# === Webhook Setup & Flask Launch ===
+if __name__ == "__main__":
+    bot.delete_webhook()
     bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    print("✅ Webhook set. Flask server running.")
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
+    print("✅ Webhook set successfully!")
+
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
