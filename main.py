@@ -59,19 +59,23 @@ def button_handler(update: Update, context: CallbackContext):
         )
 
         # 2. Send promo poster
-        context.bot.send_photo(
-            chat_id=user_id,
-            photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
-            caption=(
-                "💻 *Namaste React Course by Akshay Saini – Just ₹29!*\n"
-                "🎯 50+ Hours of Project-Based Learning\n"
-                "✅ Covers React, Hooks, Redux, Routing\n"
-                "👨‍💻 For Beginners & Experienced Devs\n"
-                "🔗 https://t.me/ashbolt_bot\n"
-                "🌟 Lifetime Access"
-            ),
-            parse_mode='Markdown'
-        )
+        try:
+    context.bot.send_photo(
+        chat_id=user_id,
+        photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
+        caption=(
+            "💻 *Namaste React Course by Akshay Saini – Just ₹29!*\n"
+            "🎯 50+ Hours of Project-Based Learning\n"
+            "✅ Covers React, Hooks, Redux, Routing\n"
+            "👨‍💻 For Beginners & Experienced Devs\n"
+            "🔗 https://t.me/ashbolt_bot\n"
+            "🌟 Lifetime Access"
+        ),
+        parse_mode='Markdown'
+    )
+except Exception as e:
+    context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ Failed to send photo: {e}")
+
 
         # 3. Send screenshot submission button
         context.bot.send_message(
