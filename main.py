@@ -58,8 +58,8 @@ def button_handler(update: Update, context: CallbackContext):
             )
         )
 
-        # 2. Send promo poster
-        try:
+# 2. Send promo poster
+try:
     context.bot.send_photo(
         chat_id=user_id,
         photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
@@ -75,7 +75,6 @@ def button_handler(update: Update, context: CallbackContext):
     )
 except Exception as e:
     context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ Failed to send photo: {e}")
-
 
         # 3. Send screenshot submission button
         context.bot.send_message(
