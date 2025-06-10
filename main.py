@@ -40,19 +40,25 @@ def start(update: Update, context: CallbackContext):
 
 def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
-    user_id = query.message.chat_id
+    user_id = query.from_user.id  # Use from_user.id instead of message.chat_id for safety
     query.answer()
 
     if query.data == 'buy':
-        query.message.reply_text(
-            "🔥 Namaste React Course — Just ₹29!\n"
-            "📌 To Unlock the Course:\n"
-            "1️⃣ Forward promo message to 3 groups\n"
-            "2️⃣ Upload 3 screenshots here\n"
-            "3️⃣ Pay ₹29 and send screenshot\n\n"
-            "📲 Join Channel: https://t.me/+IEY3uiiKHfU4NzQ1\n"
-            "❓ Contact admin 👉 @iam_akilesh07"
+        # 1. Send intro text
+        context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                "🔥 Namaste React Course — Just ₹29!\n"
+                "📌 To Unlock the Course:\n"
+                "1️⃣ Forward promo message to 3 groups\n"
+                "2️⃣ Upload 3 screenshots here\n"
+                "3️⃣ Pay ₹29 and send screenshot\n\n"
+                "📲 Join Channel: https://t.me/+IEY3uiiKHfU4NzQ1\n"
+                "❓ Contact admin 👉 @iam_akilesh07"
+            )
         )
+
+        # 2. Send promo poster
         context.bot.send_photo(
             chat_id=user_id,
             photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
@@ -66,6 +72,8 @@ def button_handler(update: Update, context: CallbackContext):
             ),
             parse_mode='Markdown'
         )
+
+        # 3. Send screenshot submission button
         context.bot.send_message(
             chat_id=user_id,
             text="👇 Submit your 3 screenshots 👇",
@@ -81,12 +89,17 @@ def button_handler(update: Update, context: CallbackContext):
 
     elif query.data == 'send_receipt':
         user_state[user_id] = "awaiting_payment"
-        context.bot.send_message(chat_id=user_id, text="📥 Send your ₹29 UPI payment screenshot.\n⚠️ Fake UTRs will be banned.")
+        context.bot.send_message(
+            chat_id=user_id,
+            text="📥 Send your ₹29 UPI payment screenshot.\n⚠️ Fake UTRs will be banned!"
+        )
 
     elif query.data.startswith("approve_"):
         target_id = int(query.data.split("_")[1])
-        context.bot.send_message(chat_id=target_id,
-                                 text="✅ Payment Approved!\n🎓 Course Link: https://1024terabox.com/s/1F_FRmqIs_1HpALb7zUlM0g\n🔑 Password: 7878")
+        context.bot.send_message(
+            chat_id=target_id,
+            text="✅ Payment Approved!\n🎓 Course link: https://1024terabox.com/s/1F_FRmqIs_1HpALb7zUlM0g\n🔑 Password: 7878"
+        )
         context.bot.send_message(chat_id=ADMIN_ID, text=f"✅ Approved access for user ID: {target_id}")
 
     elif query.data.startswith("reject_"):
