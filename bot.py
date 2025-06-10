@@ -1,10 +1,14 @@
 # ✅ STEP 1: Install required library
 # !pip install python-telegram-bot==13.15
+# You also need a web server library like Flask or FastAPI for webhooks.
+# For simplicity with python-telegram-bot's webhook, Flask is often used internally.
+# Or, if you need a full web server for other tasks, you'd integrate it.
+# For just webhook, python-telegram-bot can handle the internal server.
 
 # ✅ STEP 2: Imports & Config
 import logging
-import os # Import os module
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import os
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
 
 # ✅ Bot Configuration - Get from environment variables
@@ -14,15 +18,14 @@ UPI_ID = os.environ.get('UPI_ID')
 
 # Validate if environment variables are set
 if not BOT_TOKEN:
-    logging.error("BOT_TOKEN environment variable not set.")
+    logging.error("BOT_TOKEN environment variable not set. Exiting.")
     exit(1)
 if not ADMIN_ID:
-    logging.error("ADMIN_ID environment variable not set.")
+    logging.error("ADMIN_ID environment variable not set. Exiting.")
     exit(1)
 if not UPI_ID:
-    logging.error("UPI_ID environment variable not set.")
+    logging.error("UPI_ID environment variable not set. Exiting.")
     exit(1)
-
 
 # ✅ Logger
 logging.basicConfig(
@@ -33,7 +36,13 @@ logging.basicConfig(
 user_state = {}
 user_screenshot_counter = {}
 
-def notify_admin(user, message):
+# --- IMPORTANT: Modify notify_admin for webhook context ---
+# When using webhooks, the 'context' might not always be available globally
+# if notify_admin is called outside of an active handler.
+# A safer approach is to pass the bot instance or context when calling it.
+# For now, I'll adjust it slightly, but keep in mind that for cron-like jobs,
+# you might need to instantiate a new Bot object.
+def notify_admin(bot_instance: Bot, user, message):
     """Helper function to notify admin about user actions"""
     admin_message = f"👤 User Action: {message}\n"
     admin_message += f"🆔 ID: {user.id}\n"
@@ -41,21 +50,10 @@ def notify_admin(user, message):
     admin_message += f" {user.last_name}" if user.last_name else ""
     admin_message += f"\n📧 Username: @{user.username}" if user.username else "\n📧 Username: N/A"
 
-    # Get the bot instance from any handler's context
-    # This part is a bit tricky. In a deployed environment,
-    # you might not have direct access to 'updater.bot' outside of the main loop.
-    # A more robust way is to pass the bot instance or context around,
-    # or re-instantiate if absolutely necessary (less efficient).
-    # For simplicity, we'll keep the current approach, but be aware it's not ideal for
-    # concurrent calls if not managed carefully.
     try:
-        context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
-    except AttributeError:
-        # Fallback if context.bot is not available (e.g., if called outside a handler)
-        # This will create a new bot instance, which is generally discouraged but works as a fallback
-        from telegram import Bot
-        temp_bot = Bot(token=BOT_TOKEN)
-        temp_bot.send_message(chat_id=ADMIN_ID, text=admin_message)
+        bot_instance.send_message(chat_id=ADMIN_ID, text=admin_message)
+    except Exception as e:
+        logging.error(f"Failed to notify admin: {e}")
 
 
 # ✅ /start command
@@ -69,6 +67,9 @@ def start(update: Update, context: CallbackContext):
         f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\nClick 'Buy Course' to start your journey!",
         reply_markup=reply_markup
     )
+    # Notify admin about new user using the bot instance from context
+    notify_admin(context.bot, user, "Started the bot")
+
 
 # ✅ Promo Flow (Buy)
 def button_handler(update: Update, context: CallbackContext):
@@ -78,7 +79,7 @@ def button_handler(update: Update, context: CallbackContext):
 
     if query.data == 'buy':
         # Notify admin that user clicked buy
-        notify_admin(user, "Clicked 'Buy Course' button")
+        notify_admin(context.bot, user, "Clicked 'Buy Course' button")
 
         query.message.reply_text(
             "🔥 Namaste React Course — Just ₹29!\n"
@@ -145,7 +146,7 @@ def handle_photos(update: Update, context: CallbackContext):
             user_state[user_id] = "awaiting_payment_button"
 
             # Notify admin that user submitted all screenshots
-            notify_admin(user, "Submitted all 3 screenshots")
+            notify_admin(context.bot, user, "Submitted all 3 screenshots")
 
             # Show UPI + QR
             context.bot.send_message(
@@ -234,7 +235,7 @@ def submit_command(update: Update, context: CallbackContext):
 def unknown_command(update: Update, context: CallbackContext):
     update.message.reply_text("❌ Unknown command. Use /start or tap buttons.")
 
-# ✅ Main bot runner
+# ✅ Main bot runner - MODIFIED FOR WEBHOOKS
 def run_bot():
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -249,9 +250,35 @@ def run_bot():
     dp.add_handler(MessageHandler(Filters.photo, handle_photos))
     dp.add_handler(MessageHandler(Filters.command, unknown_command))
 
-    updater.start_polling()
-    print("🤖 Bot is running...")
-    updater.idle()
+    # --- Webhook configuration for Render's free Web Service ---
+    # Get port from environment, defaults to 8443 for local testing/fallback
+    PORT = int(os.environ.get('PORT', '8443'))
+
+    # Render sets RENDER_EXTERNAL_HOSTNAME for your public URL
+    # Example: your-service-name.onrender.com
+    APP_NAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+
+    if APP_NAME:
+        # If running on Render, set up webhook
+        webhook_url = f"https://{APP_NAME}/{BOT_TOKEN}"
+        updater.start_webhook(listen="0.0.0.0",
+                              port=PORT,
+                              url_path=BOT_TOKEN,
+                              webhook_url=webhook_url)
+        logging.info(f"🤖 Bot running with webhook on {webhook_url}")
+        # IMPORTANT: Set webhook with Telegram if you haven't already.
+        # This line ensures Telegram knows where to send updates.
+        # Only set it if it's not already set correctly to avoid unnecessary calls.
+        # You might want to do this once on deployment or if the webhook URL changes.
+        # For simplicity, we'll put it here, but a more robust app might manage this.
+        updater.bot.set_webhook(webhook_url)
+        logging.info("Telegram webhook set successfully.")
+    else:
+        # Fallback to polling for local development or if APP_NAME isn't set
+        updater.start_polling()
+        logging.info("🤖 Bot running with long polling (local development)")
+
+    updater.idle() # This keeps the webhook server running
 
 # ✅ Run
 if __name__ == '__main__':
