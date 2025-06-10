@@ -47,7 +47,7 @@ def button_handler(update: Update, context: CallbackContext):
             "❓ Contact admin 👉 @iam_akilesh07"
         )
 
-             context.bot.send_photo(
+        context.bot.send_photo(
             chat_id=user_id,
             photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
             caption=(
@@ -63,7 +63,6 @@ def button_handler(update: Update, context: CallbackContext):
             parse_mode='Markdown'
         )
 
-
         context.bot.send_message(
             chat_id=user_id,
             text="👇 Submit your 3 screenshots 👇",
@@ -71,34 +70,6 @@ def button_handler(update: Update, context: CallbackContext):
                 [InlineKeyboardButton("📤 Submit Screenshots", callback_data='submit')]
             ])
         )
-
-    elif query.data == 'submit':
-        user_state[user_id] = "collecting_screenshots"
-        user_screenshot_counter[user_id] = 0
-        context.bot.send_message(chat_id=user_id, text="📤 Upload your 3 screenshots one by one.")
-
-    elif query.data == 'send_receipt':
-        user_state[user_id] = "awaiting_payment"
-        context.bot.send_message(
-            chat_id=user_id,
-            text="📥 Send your ₹29 UPI payment screenshot now.\n\n⚠️ Fake UTRs will be banned!"
-        )
-
-    elif query.data.startswith("approve_"):
-        target_id = int(query.data.split("_")[1])
-        context.bot.send_message(
-            chat_id=target_id,
-            text="✅ Payment Approved!\n🎓 Course link: https://1024terabox.com/s/1F_FRmqIs_1HpALb7zUlM0g\n🔑 Password: 7878"
-        )
-        context.bot.send_message(chat_id=ADMIN_ID, text=f"✅ You approved access for user: {target_id}")
-
-    elif query.data.startswith("reject_"):
-        target_id = int(query.data.split("_")[1])
-        context.bot.send_message(
-            chat_id=target_id,
-            text="❌ Payment not accepted. Please ensure it's correct and try again."
-        )
-        context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ You rejected access for user: {target_id}")
 
 # Handle photos
 def handle_photos(update: Update, context: CallbackContext):
