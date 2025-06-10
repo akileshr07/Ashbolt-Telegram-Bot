@@ -47,18 +47,22 @@ def button_handler(update: Update, context: CallbackContext):
             "❓ Contact admin 👉 @iam_akilesh07"
         )
 
-       context.bot.send_photo(
-    chat_id=user_id,
-    photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
-    caption=(
-        "💻 *Namaste React Course by Akshay Saini – Just $0.35 / ₹29!*\n\n"
-        "🎯 50+ Hours of Project-Based Learning\n"
-        "🚀 Includes 3 Major Projects + Interview Prep\n"
-        "🔗 Join Now 👉 https://t.me/ashbolt_bot\n"
-        "📲 Or Search \"ashbolt_bot\" on Telegram\n\n"
-    ),
-    parse_mode='Markdown'
-)
+             context.bot.send_photo(
+            chat_id=user_id,
+            photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
+            caption=(
+                "💻 *Namaste React Course by Akshay Saini – Just $0.35 / ₹29!*\n\n"
+                "🎯 50+ Hours of Project-Based Learning\n"
+                "🚀 Includes 3 Major Projects + Interview Prep\n"
+                "✅ Covers Latest React JS Concepts (Hooks, Redux, Routing, etc.)\n"
+                "👨‍💻 Perfect for Beginners & Experienced Developers\n\n"
+                "🔗 Join Now 👉 https://t.me/ashbolt_bot\n"
+                "📲 Or Search \"ashbolt_bot\" on Telegram\n\n"
+                "🌟 One-Time Access • Learn at Your Own Pace"
+            ),
+            parse_mode='Markdown'
+        )
+
 
         context.bot.send_message(
             chat_id=user_id,
