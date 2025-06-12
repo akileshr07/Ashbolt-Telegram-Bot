@@ -8,7 +8,7 @@
 # ✅ STEP 2: Imports & Config
 import logging
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
 
 # ✅ Bot Configuration - Get from environment variables
@@ -42,13 +42,15 @@ user_screenshot_counter = {}
 # A safer approach is to pass the bot instance or context when calling it.
 # For now, I'll adjust it slightly, but keep in mind that for cron-like jobs,
 # you might need to instantiate a new Bot object.
-def notify_admin(bot_instance: Bot, user, message):
+def notify_admin(bot_instance: Bot, user, message, phone_number=None):
     """Helper function to notify admin about user actions"""
     admin_message = f"👤 User Action: {message}\n"
     admin_message += f"🆔 ID: {user.id}\n"
     admin_message += f"👤 Name: {user.first_name}"
     admin_message += f" {user.last_name}" if user.last_name else ""
     admin_message += f"\n📧 Username: @{user.username}" if user.username else "\n📧 Username: N/A"
+    if phone_number:
+        admin_message += f"\n📞 Phone Number: {phone_number}"
 
     try:
         bot_instance.send_message(chat_id=ADMIN_ID, text=admin_message)
@@ -59,16 +61,48 @@ def notify_admin(bot_instance: Bot, user, message):
 # ✅ /start command
 def start(update: Update, context: CallbackContext):
     user = update.message.from_user
+    # Request contact
     keyboard = [[
-        InlineKeyboardButton("🔥 Buy Course At Just ₹29", callback_data='buy')
+        KeyboardButton("Share My Phone Number 📞", request_contact=True)
     ]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     update.message.reply_text(
-        f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\nClick 'Buy Course' to start your journey!",
+        f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\n"
+        "To proceed, please share your phone number by clicking the button below.",
         reply_markup=reply_markup
     )
-    # Notify admin about new user using the bot instance from context
-    notify_admin(context.bot, user, "Started the bot")
+    user_state[user.id] = "awaiting_contact"
+
+
+# ✅ Handle shared contact
+def handle_contact(update: Update, context: CallbackContext):
+    user = update.message.from_user
+    chat_id = update.message.chat_id
+
+    if user_state.get(user.id) == "awaiting_contact" and update.message.contact:
+        phone_number = update.message.contact.phone_number
+        notify_admin(context.bot, user, "Shared phone number", phone_number)
+        del user_state[user.id] # Clear state after receiving contact
+
+        # Remove the contact sharing keyboard
+        update.message.reply_text(
+            "Thank you for sharing your phone number!",
+            reply_markup=ReplyKeyboardRemove()
+        )
+
+        # Now proceed with the original "Buy Course" flow
+        keyboard = [[
+            InlineKeyboardButton("🔥 Buy Course At Just ₹29", callback_data='buy')
+        ]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        context.bot.send_message(
+            chat_id=chat_id,
+            text=f"Great! Now click 'Buy Course' to start your journey!",
+            reply_markup=reply_markup
+        )
+    else:
+        # If user sends contact outside of expected state, or it's not a contact message
+        update.message.reply_text("Please use the /start command if you wish to share your contact or buy the course.")
 
 
 # ✅ Promo Flow (Buy)
@@ -247,8 +281,11 @@ def run_bot():
 
     # Buttons & Messages
     dp.add_handler(CallbackQueryHandler(button_handler))
+    # Handle photo messages AND contact messages
     dp.add_handler(MessageHandler(Filters.photo, handle_photos))
+    dp.add_handler(MessageHandler(Filters.contact, handle_contact))
     dp.add_handler(MessageHandler(Filters.command, unknown_command))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, unknown_command)) # Catch other text messages as unknown
 
     # --- Webhook configuration for Render's free Web Service ---
     # Get port from environment, defaults to 8443 for local testing/fallback
