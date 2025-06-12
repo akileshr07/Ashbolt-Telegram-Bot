@@ -1,9 +1,5 @@
 # ✅ STEP 1: Install required library
 # !pip install python-telegram-bot==13.15
-# You also need a web server library like Flask or FastAPI for webhooks.
-# For simplicity with python-telegram-bot's webhook, Flask is often used internally.
-# Or, if you need a full web server for other tasks, you'd integrate it.
-# For just webhook, python-telegram-bot can handle the internal server.
 
 # ✅ STEP 2: Imports & Config
 import logging
@@ -33,17 +29,17 @@ logging.basicConfig(
     level=logging.INFO)
 
 # ✅ User State
+# This dictionary keeps track of where each user is in the bot's flow.
+# Example: user_state[user_id] = "awaiting_contact"
 user_state = {}
-user_screenshot_counter = {}
+user_screenshot_counter = {} # Tracks how many screenshots a user has sent
 
-# --- IMPORTANT: Modify notify_admin for webhook context ---
-# When using webhooks, the 'context' might not always be available globally
-# if notify_admin is called outside of an active handler.
-# A safer approach is to pass the bot instance or context when calling it.
-# For now, I'll adjust it slightly, but keep in mind that for cron-like jobs,
-# you might need to instantiate a new Bot object.
+# --- Helper function to notify admin ---
 def notify_admin(bot_instance: Bot, user, message, phone_number=None):
-    """Helper function to notify admin about user actions"""
+    """
+    Sends a notification to the admin with user details and a custom message.
+    Includes phone number if provided.
+    """
     admin_message = f"👤 User Action: {message}\n"
     admin_message += f"🆔 ID: {user.id}\n"
     admin_message += f"👤 Name: {user.first_name}"
@@ -58,10 +54,14 @@ def notify_admin(bot_instance: Bot, user, message, phone_number=None):
         logging.error(f"Failed to notify admin: {e}")
 
 
-# ✅ /start command
+# ✅ /start command handler
 def start(update: Update, context: CallbackContext):
+    """
+    Handles the /start command. Prompts the user to share their phone number
+    before proceeding with the course purchase flow.
+    """
     user = update.message.from_user
-    # Request contact
+    # Request contact using a ReplyKeyboardMarkup
     keyboard = [[
         KeyboardButton("Share My Phone Number 📞", request_contact=True)
     ]]
@@ -71,26 +71,32 @@ def start(update: Update, context: CallbackContext):
         "To proceed, please share your phone number by clicking the button below.",
         reply_markup=reply_markup
     )
+    # Set user state to anticipate contact sharing
     user_state[user.id] = "awaiting_contact"
-
 
 # ✅ Handle shared contact
 def handle_contact(update: Update, context: CallbackContext):
+    """
+    Processes the shared contact information from the user.
+    Notifies the admin and then continues with the course purchase flow.
+    """
     user = update.message.from_user
     chat_id = update.message.chat_id
 
+    # Check if the message is a contact and if the user was in the expected state
     if user_state.get(user.id) == "awaiting_contact" and update.message.contact:
         phone_number = update.message.contact.phone_number
+        # Notify admin with the user's details and phone number
         notify_admin(context.bot, user, "Shared phone number", phone_number)
         del user_state[user.id] # Clear state after receiving contact
 
-        # Remove the contact sharing keyboard
+        # Remove the contact sharing keyboard from the user's view
         update.message.reply_text(
             "Thank you for sharing your phone number!",
             reply_markup=ReplyKeyboardRemove()
         )
 
-        # Now proceed with the original "Buy Course" flow
+        # Now, present the "Buy Course" button as the next step
         keyboard = [[
             InlineKeyboardButton("🔥 Buy Course At Just ₹29", callback_data='buy')
         ]]
@@ -101,20 +107,23 @@ def handle_contact(update: Update, context: CallbackContext):
             reply_markup=reply_markup
         )
     else:
-        # If user sends contact outside of expected state, or it's not a contact message
+        # If a contact is sent when not expected, or it's not a contact message
         update.message.reply_text("Please use the /start command if you wish to share your contact or buy the course.")
 
-
-# ✅ Promo Flow (Buy)
+# ✅ Promo Flow (Buy) - Inline button handler
 def button_handler(update: Update, context: CallbackContext):
+    """
+    Handles all inline button presses, managing the course promo flow.
+    """
     query = update.callback_query
-    query.answer()
+    query.answer() # Acknowledge the callback query immediately
     user = query.from_user
 
     if query.data == 'buy':
-        # Notify admin that user clicked buy
+        # Notify admin that user initiated the purchase flow
         notify_admin(context.bot, user, "Clicked 'Buy Course' button")
 
+        # Send introductory text about the course and steps
         query.message.reply_text(
             "🔥 Namaste React Course — Just ₹29!\n"
             "🚀 Limited Time Offer – Act Fast!\n\n"
@@ -126,20 +135,24 @@ def button_handler(update: Update, context: CallbackContext):
             "📲 Join the Channel: https://t.me/+IEY3uiiKHfU4NzQ1"
         )
 
+        # Send the promotional image with a caption
         image_url = "https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg"
         context.bot.send_photo(
             chat_id=query.message.chat_id,
             photo=image_url,
-            caption=("💻 Namaste React Course by Akshay Saini – Just $0.35 / ₹29\n"
-                     "🎯 50+ Hours of Project-Based Learning\n\n"
-                     "🚀 Includes 3 Major Projects + Interview Prep\n\n"
-                     "👨‍💻 Perfect for Beginners & Experienced Developer\n\n"
-                     "🎯 Lifetime Access | Projects | Notes\n\n"
-                     "🔗 Join Now 👉 https://t.me/ashbolt_bot\n"
-                     "📲 Or Search 'ashbolt_bot' on Telegram\n"
-                     "🚀 Limited Time Offer")
+            caption=(
+                "💻 Namaste React Course by Akshay Saini – Just $0.35 / ₹29\n"
+                "🎯 50+ Hours of Project-Based Learning\n\n"
+                "🚀 Includes 3 Major Projects + Interview Prep\n\n"
+                "👨‍💻 Perfect for Beginners & Experienced Developer\n\n"
+                "🎯 Lifetime Access | Projects | Notes\n\n"
+                "🔗 Join Now 👉 https://t.me/ashbolt_bot\n"
+                "📲 Or Search 'ashbolt_bot' on Telegram\n"
+                "🚀 Limited Time Offer"
+            )
         )
 
+        # Offer the "Submit Screenshots" button
         keyboard = [[
             InlineKeyboardButton("📤 Submit Screenshots", callback_data='submit')
         ]]
@@ -151,38 +164,47 @@ def button_handler(update: Update, context: CallbackContext):
         )
 
     elif query.data == 'submit':
+        # Prompt user to upload screenshots
         context.bot.send_message(
             chat_id=query.message.chat_id,
             text="📤 Please upload your 3 screenshot proofs here one by one."
         )
+        # Set user state to anticipate screenshots
         user_state[query.message.chat_id] = "collecting_screenshots"
-        user_screenshot_counter[query.message.chat_id] = 0
+        user_screenshot_counter[query.message.chat_id] = 0 # Reset screenshot counter for this user
 
     elif query.data == 'send_receipt':
+        # Prompt user to send payment receipt
         context.bot.send_message(
             chat_id=query.message.chat_id,
             text="📥 Please send your payment screenshot now."
         )
+        # Set user state to anticipate payment receipt
         user_state[query.message.chat_id] = "ready_to_receive_payment"
 
 # ✅ Handle Photos (Screenshots + Payment Proof)
 def handle_photos(update: Update, context: CallbackContext):
+    """
+    Handles incoming photo messages, distinguishing between promo screenshots
+    and payment receipts based on user state.
+    """
     user_id = update.message.chat_id
     user = update.message.from_user
 
-    # Screenshot Phase
+    # --- Screenshot Collection Phase ---
     if user_state.get(user_id) == "collecting_screenshots":
         user_screenshot_counter[user_id] += 1
         context.bot.send_message(chat_id=user_id,
                                  text=f"✅ Screenshot {user_screenshot_counter[user_id]} received!")
 
         if user_screenshot_counter[user_id] == 3:
+            # All 3 screenshots received, transition to payment phase
             user_state[user_id] = "awaiting_payment_button"
 
-            # Notify admin that user submitted all screenshots
+            # Notify admin about screenshot submission
             notify_admin(context.bot, user, "Submitted all 3 screenshots")
 
-            # Show UPI + QR
+            # Provide UPI ID and QR code for payment
             context.bot.send_message(
                 chat_id=user_id,
                 text=(f"✅ All 3 screenshots received!\n\n"
@@ -196,6 +218,7 @@ def handle_photos(update: Update, context: CallbackContext):
                 caption="📷 Scan this QR to pay ₹29"
             )
 
+            # Offer the "Send Payment Receipt" button
             keyboard = [[
                 InlineKeyboardButton("📥 Send Payment Receipt", callback_data='send_receipt')
             ]]
@@ -206,9 +229,9 @@ def handle_photos(update: Update, context: CallbackContext):
                 reply_markup=reply_markup
             )
 
-    # Payment Receipt Phase
+    # --- Payment Receipt Phase ---
     elif user_state.get(user_id) == "ready_to_receive_payment":
-        user_state[user_id] = "awaiting_verification"
+        user_state[user_id] = "awaiting_verification" # User has sent payment, now waiting for admin to verify
 
         # Forward payment screenshot to admin with user info
         admin_message = f"🆕 Payment Receipt from User:\n"
@@ -224,7 +247,7 @@ def handle_photos(update: Update, context: CallbackContext):
             message_id=update.message.message_id
         )
 
-        # Send confirmation to user
+        # Send confirmation message to the user
         context.bot.send_message(
             chat_id=user_id,
             text=("✅ Payment receipt received!\n\n"
@@ -235,15 +258,19 @@ def handle_photos(update: Update, context: CallbackContext):
 
 # ✅ Admin command to send course link
 def send_course_link(update: Update, context: CallbackContext):
-    # Check if the command is from admin
+    """
+    Allows the admin to send the course access link and password to a user.
+    Usage: /send_link <user_id> <link> <password>
+    """
+    # Check if the command is issued by the admin
     if update.message.from_user.id == ADMIN_ID:
         try:
-            # Command format: /send_link <user_id> <link> <password>
+            # Parse command arguments
             user_id = int(context.args[0])
             link = context.args[1]
             password = context.args[2]
 
-            # Send the course link to the user
+            # Send the course link to the specified user
             context.bot.send_message(
                 chat_id=user_id,
                 text=f"🎉 Your payment has been verified!\n\n"
@@ -253,47 +280,55 @@ def send_course_link(update: Update, context: CallbackContext):
                      f"Enjoy learning! 😊"
             )
 
-            # Confirm to admin
+            # Confirm to the admin that the link was sent
             update.message.reply_text(f"✅ Course link sent successfully to user {user_id}")
 
         except (IndexError, ValueError):
+            # Handle incorrect command usage
             update.message.reply_text("❌ Usage: /send_link <user_id> <link> <password>")
     else:
+        # Deny unauthorized access
         update.message.reply_text("❌ Unauthorized access.")
 
 # ✅ /submit fallback
 def submit_command(update: Update, context: CallbackContext):
+    """
+    A fallback handler for the /submit command, guiding users to the correct button.
+    """
     update.message.reply_text("📤 Please click 📤 Submit Screenshots option at top")
 
-# ✅ Handle unknown commands
-def unknown_command(update: Update, context: CallbackContext):
-    update.message.reply_text("❌ Unknown command. Use /start or tap buttons.")
+# ✅ Handle unknown commands and general text messages
+def unknown_message(update: Update, context: CallbackContext):
+    """
+    Responds to unknown commands or general text messages not handled by other handlers.
+    """
+    update.message.reply_text("❌ I didn't understand that. Use /start or tap the buttons.")
 
-# ✅ Main bot runner - MODIFIED FOR WEBHOOKS
+# ✅ Main bot runner - Configured for Webhooks (e.g., for Render deployment)
 def run_bot():
+    """
+    Initializes and runs the Telegram bot using either webhooks or long polling.
+    """
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
-    # Commands
+    # Register handlers
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("submit", submit_command))
     dp.add_handler(CommandHandler("send_link", send_course_link))
 
-    # Buttons & Messages
+    # Handle inline button presses
     dp.add_handler(CallbackQueryHandler(button_handler))
-    # Handle photo messages AND contact messages
-    dp.add_handler(MessageHandler(Filters.photo, handle_photos))
-    dp.add_handler(MessageHandler(Filters.contact, handle_contact))
-    dp.add_handler(MessageHandler(Filters.command, unknown_command))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, unknown_command)) # Catch other text messages as unknown
+
+    # Handle different types of messages
+    dp.add_handler(MessageHandler(Filters.photo, handle_photos)) # For screenshots and payment proof
+    dp.add_handler(MessageHandler(Filters.contact, handle_contact)) # For shared phone numbers
+    dp.add_handler(MessageHandler(Filters.command, unknown_message)) # For unhandled commands
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, unknown_message)) # For unhandled text messages
 
     # --- Webhook configuration for Render's free Web Service ---
-    # Get port from environment, defaults to 8443 for local testing/fallback
-    PORT = int(os.environ.get('PORT', '8443'))
-
-    # Render sets RENDER_EXTERNAL_HOSTNAME for your public URL
-    # Example: your-service-name.onrender.com
-    APP_NAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+    PORT = int(os.environ.get('PORT', '8443')) # Get port from environment or default
+    APP_NAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME') # Render's public hostname
 
     if APP_NAME:
         # If running on Render, set up webhook
@@ -303,20 +338,18 @@ def run_bot():
                               url_path=BOT_TOKEN,
                               webhook_url=webhook_url)
         logging.info(f"🤖 Bot running with webhook on {webhook_url}")
-        # IMPORTANT: Set webhook with Telegram if you haven't already.
-        # This line ensures Telegram knows where to send updates.
-        # Only set it if it's not already set correctly to avoid unnecessary calls.
-        # You might want to do this once on deployment or if the webhook URL changes.
-        # For simplicity, we'll put it here, but a more robust app might manage this.
-        updater.bot.set_webhook(webhook_url)
-        logging.info("Telegram webhook set successfully.")
+        # IMPORTANT: The set_webhook call below is commented out.
+        # It should ideally be done once manually (e.g., via curl) or in a
+        # separate deployment script to avoid rate limit issues on every restart.
+        # updater.bot.set_webhook(webhook_url)
+        # logging.info("Telegram webhook set successfully.")
     else:
-        # Fallback to polling for local development or if APP_NAME isn't set
+        # Fallback to long polling for local development or if APP_NAME isn't set
         updater.start_polling()
         logging.info("🤖 Bot running with long polling (local development)")
 
-    updater.idle() # This keeps the webhook server running
+    updater.idle() # Keeps the bot running until interrupted
 
-# ✅ Run
+# ✅ Run the bot
 if __name__ == '__main__':
     run_bot()
