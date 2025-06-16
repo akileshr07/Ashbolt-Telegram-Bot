@@ -1,18 +1,18 @@
 import os
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CallbackQueryHandler, CommandHandler,
     MessageHandler, ContextTypes, filters
 )
-from telegram.ext.webhook import WebhookHandler
 
 # Load config from env vars
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 UPI_ID = os.environ.get("UPI_ID")
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL")  # Example: https://ashboltbot.onrender.com/webhook
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")  # Example: https://ashboltbot.onrender.com
+WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN") # Add a secret token for security
 
 # Logging
 logging.basicConfig(
@@ -23,7 +23,6 @@ logging.basicConfig(
 # App and state
 fastapi_app = FastAPI()
 bot_app = Application.builder().token(BOT_TOKEN).build()
-webhook_handler = WebhookHandler(bot_app)
 
 user_state = {}
 user_screenshot_counter = {}
@@ -105,7 +104,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state[user_id] = "awaiting_sharing_button_click"
 
     elif user_state.get(user_id) == "collecting_screenshots":
-        user_screenshot_counter[user_id] += 1
+        user_screenshot_counter[user_id] = user_screenshot_counter.get(user_id, 0) + 1
         await context.bot.send_message(chat_id=user_id,
             text=f"✅ Screenshot {user_screenshot_counter[user_id]} received!")
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
@@ -130,8 +129,11 @@ async def send_course_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("✅ Sent!")
             user_state.pop(user_id, None)
             user_screenshot_counter.pop(user_id, None)
-        except Exception:
+        except (IndexError, ValueError):
             await update.message.reply_text("❌ Usage: /send_link <user_id> <link> <password>")
+        except Exception as e:
+            logging.error(f"Error sending course link: {e}")
+            await update.message.reply_text(f"An error occurred: {e}")
     else:
         await update.message.reply_text("❌ Unauthorized")
 
@@ -146,14 +148,25 @@ bot_app.add_handler(MessageHandler(filters.PHOTO, handle_photos))
 bot_app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
 # ---------- Webhook endpoint ----------
-@fastapi_app.post("/webhook")
+@fastapi_app.post(f"/{WEBHOOK_SECRET_TOKEN}")
 async def telegram_webhook(request: Request):
+    if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != WEBHOOK_SECRET_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid secret token")
+
     body = await request.json()
     update = Update.de_json(body, bot_app.bot)
-    await webhook_handler.handle_update(update)
+    await bot_app.process_update(update)
     return {"ok": True}
 
 # ---------- Set webhook on startup ----------
 @fastapi_app.on_event("startup")
 async def on_startup():
-    await bot_app.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+    logging.info(f"Setting webhook to {WEBHOOK_URL}/{WEBHOOK_SECRET_TOKEN}")
+    await bot_app.bot.set_webhook(
+        url=f"{WEBHOOK_URL}/{WEBHOOK_SECRET_TOKEN}",
+        secret_token=WEBHOOK_SECRET_TOKEN
+    )
+    logging.info("Webhook set successfully.")
+
+# To run this with uvicorn, you would use:
+# uvicorn your_file_name:fastapi_app --host 0.0.0.0 --port 10000
