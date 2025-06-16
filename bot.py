@@ -90,18 +90,31 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo_file_id = update.message.photo[-1].file_id
 
     if user_state.get(user_id) == "ready_to_receive_payment":
-        user_state[user_id] = "payment_received"
+        # Notify admin about the payment screenshot
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
                                      caption=f"🧾 Payment from {user.full_name or user.username}")
+
+        # Confirm receipt and state "under verification" to the user
         await context.bot.send_message(chat_id=user_id,
-            text="✅ Payment received. Please wait...\nNow, share the promo message in 3 groups and send screenshots.")
+                                       text="✅ Payment proof received. Your payment is now *under verification*.",
+                                       parse_mode='Markdown')
+
+        # Now, proceed with the course details and sharing instructions.
+        # This section is modified to perfectly match your workflow description.
+        await context.bot.send_message(chat_id=user_id,
+            text="Awesome! As part of the ₹29 course offer, please share the promo message in 3 Telegram or WhatsApp groups and take screenshots of your shares.")
+        
         await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
                                      caption="📲 Share this image + join link in 3 groups.")
+        
         keyboard = [[InlineKeyboardButton("📤 Submit Screenshots", callback_data='submit_sharing_screenshots')]]
         await context.bot.send_message(chat_id=user_id,
             text="👇 Submit your 3 sharing screenshots",
             reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        # Update user state to await the sharing button click
         user_state[user_id] = "awaiting_sharing_button_click"
+
 
     elif user_state.get(user_id) == "collecting_screenshots":
         user_screenshot_counter[user_id] = user_screenshot_counter.get(user_id, 0) + 1
