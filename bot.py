@@ -100,18 +100,17 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                        parse_mode='Markdown')
 
         # Now, proceed with the course details and sharing instructions.
-        # This section is modified to perfectly match your workflow description.
         await context.bot.send_message(chat_id=user_id,
             text="Awesome! As part of the ₹29 course offer, please share the promo message in 3 Telegram or WhatsApp groups and take screenshots of your shares.")
-        
+
         await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
                                      caption="📲 Share this image + join link in 3 groups.")
-        
+
         keyboard = [[InlineKeyboardButton("📤 Submit Screenshots", callback_data='submit_sharing_screenshots')]]
         await context.bot.send_message(chat_id=user_id,
             text="👇 Submit your 3 sharing screenshots",
             reply_markup=InlineKeyboardMarkup(keyboard))
-        
+
         # Update user state to await the sharing button click
         user_state[user_id] = "awaiting_sharing_button_click"
 
@@ -168,18 +167,37 @@ async def telegram_webhook(request: Request):
 
     body = await request.json()
     update = Update.de_json(body, bot_app.bot)
+    # Process the update using the initialized application
     await bot_app.process_update(update)
     return {"ok": True}
 
-# ---------- Set webhook on startup ----------
+# ---------- Set webhook and initialize application on startup ----------
 @fastapi_app.on_event("startup")
 async def on_startup():
-    logging.info(f"Setting webhook to {WEBHOOK_URL}/{WEBHOOK_SECRET_TOKEN}")
+    logging.info("Initializing Telegram bot application...")
+    # Initialize the application
+    await bot_app.initialize()
+
+    # Start the application - this sets up the internal task queue etc.
+    await bot_app.start()
+    logging.info("Telegram bot application initialized and started.")
+
+    # Set the webhook URL
+    webhook_url_full = f"{WEBHOOK_URL}/{WEBHOOK_SECRET_TOKEN}"
+    logging.info(f"Setting webhook to {webhook_url_full}")
     await bot_app.bot.set_webhook(
-        url=f"{WEBHOOK_URL}/{WEBHOOK_SECRET_TOKEN}",
+        url=webhook_url_full,
         secret_token=WEBHOOK_SECRET_TOKEN
     )
     logging.info("Webhook set successfully.")
+
+@fastapi_app.on_event("shutdown")
+async def on_shutdown():
+    logging.info("Stopping Telegram bot application...")
+    # Stop the application gracefully on shutdown
+    await bot_app.stop()
+    await bot_app.shutdown()
+    logging.info("Telegram bot application stopped.")
 
 # To run this with uvicorn, you would use:
 # uvicorn your_file_name:fastapi_app --host 0.0.0.0 --port 10000
