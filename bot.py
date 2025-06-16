@@ -123,7 +123,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Now, proceed with the course details and sharing instructions.
         await context.bot.send_message(chat_id=user_id,
-            text="Awesome! As part of the ₹29 course offer, please share the promo message with message in 3 Telegram or WhatsApp groups and take screenshots of your shares.")
+            text="Awesome! As part of the course offer, please share the promo message with image in 3 Telegram  groups and take screenshots of your shares.")
 
         await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/63d8vMq3/Whats-App-Image-2025-06-16-at-20-24-36-af8e4ee8.jpg",
                                      caption=(
