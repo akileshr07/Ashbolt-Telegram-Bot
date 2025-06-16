@@ -101,10 +101,18 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Now, proceed with the course details and sharing instructions.
         await context.bot.send_message(chat_id=user_id,
-            text="Awesome! As part of the ₹29 course offer, please share the promo message in 3 Telegram or WhatsApp groups and take screenshots of your shares.")
+            text="Awesome! As part of the ₹29 course offer, please share the promo message with message in 3 Telegram or WhatsApp groups and take screenshots of your shares.")
 
-        await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg",
-                                     caption="📲 Share this image + join link in 3 groups.")
+        await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/63d8vMq3/Whats-App-Image-2025-06-16-at-20-24-36-af8e4ee8.jpg",
+                                     caption=(
+        "🚀 *Top Namaste Dev Courses for Just ₹29!*\n"
+        "🔥 Namaste React • Frontend System Design • Node.js\n"
+        "🎓 By Akshay Saini (Ex-Uber) – Real Projects + Career Prep\n\n"
+        "💥 *Only ₹29 Each* or *₹69 for All 3!*\n"
+        "📚 One-Time Access • Lifetime Learning\n\n"
+        "🔗 *Join 👉 https://t.me/ashbolt_bot*\n"
+        "🤖 Or *Search:* *ashbolt_bot* on Telegram"
+    ), parse_mode='Markdown') # Added parse_mode='Markdown' here for consistency
 
         keyboard = [[InlineKeyboardButton("📤 Submit Screenshots", callback_data='submit_sharing_screenshots')]]
         await context.bot.send_message(chat_id=user_id,
