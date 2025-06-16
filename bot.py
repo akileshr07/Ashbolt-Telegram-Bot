@@ -45,10 +45,16 @@ def notify_admin(user, message, photo=None):
 # ---------- Handlers ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
-    keyboard = [[InlineKeyboardButton("🔥 Buy Course At Just ₹29", callback_data='buy')]]
+    keyboard = [
+        [InlineKeyboardButton("1. Namaste React ₹29", callback_data='buy_react')],
+        [InlineKeyboardButton("2. Namaste Frontend System Design ₹29", callback_data='buy_frontend_sd')],
+        [InlineKeyboardButton("3. Namaste Node.js ₹29", callback_data='buy_nodejs')],
+        [InlineKeyboardButton("4. All three bundle ₹69", callback_data='buy_bundle')]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\nClick 'Buy Course' to start your journey!",
+        f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\n"
+        "Please choose a course option:",
         reply_markup=reply_markup
     )
 
@@ -57,15 +63,41 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user = query.from_user
     user_id = query.message.chat_id
+    selected_option_message = ""
+    amount_to_pay = "₹29"
 
-    if query.data == 'buy':
-        notify_admin(user, "Clicked 'Buy Course' button")
+    if query.data == 'buy_react':
+        selected_option_message = "chose 'Namaste React' (₹29)"
+    elif query.data == 'buy_frontend_sd':
+        selected_option_message = "chose 'Namaste Frontend System Design' (₹29)"
+    elif query.data == 'buy_nodejs':
+        selected_option_message = "chose 'Namaste Node.js' (₹29)"
+    elif query.data == 'buy_bundle':
+        selected_option_message = "chose 'All three bundle' (₹69)"
+        amount_to_pay = "₹69" # Update amount if bundle is chosen
+    elif query.data == 'send_receipt': # Keep existing send_receipt logic
+        await context.bot.send_message(chat_id=user_id,
+            text="📥 Please send your payment screenshot now.")
+        user_state[user_id] = "ready_to_receive_payment"
+        return # Exit to prevent showing payment details again
+
+    elif query.data == 'submit_sharing_screenshots': # Keep existing submit_sharing_screenshots logic
+        await context.bot.send_message(chat_id=user_id,
+            text="📤 Upload your 3 sharing screenshots now.")
+        user_state[user_id] = "collecting_screenshots"
+        user_screenshot_counter[user_id] = 0
+        return # Exit to prevent showing payment details again
+
+
+    # If any of the 'buy' options were clicked
+    if selected_option_message:
+        notify_admin(user, f"User {selected_option_message}")
         await query.message.reply_text(
-            "🔥 Namaste React Course — Just ₹29!\n"
-            f"💸 Pay ₹29 to:\n\n💰 *{UPI_ID}*", parse_mode='Markdown'
+            f"🔥 You selected: {selected_option_message.split('chose ')[1].capitalize()}\n"
+            f"💸 Pay {amount_to_pay} to:\n\n💰 *{UPI_ID}*", parse_mode='Markdown'
         )
         await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/3N67GnpM/qr.jpg",
-                                     caption="📷 Scan this QR to pay ₹29")
+                                     caption=f"📷 Scan this QR to pay {amount_to_pay}")
         keyboard = [[InlineKeyboardButton("📥 Send Payment Receipt", callback_data='send_receipt')]]
         await context.bot.send_message(chat_id=user_id,
             text="⬇️ Click below *after* payment, or send the screenshot now.",
@@ -73,16 +105,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         user_state[user_id] = "ready_to_receive_payment"
 
-    elif query.data == 'send_receipt':
-        await context.bot.send_message(chat_id=user_id,
-            text="📥 Please send your payment screenshot now.")
-        user_state[user_id] = "ready_to_receive_payment"
-
-    elif query.data == 'submit_sharing_screenshots':
-        await context.bot.send_message(chat_id=user_id,
-            text="📤 Upload your 3 sharing screenshots now.")
-        user_state[user_id] = "collecting_screenshots"
-        user_screenshot_counter[user_id] = 0
 
 async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.chat_id
@@ -112,7 +134,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📚 One-Time Access • Lifetime Learning\n\n"
         "🔗 *Join 👉 https://t.me/ashbolt_bot*\n"
         "🤖 Or *Search:* *ashbolt_bot* on Telegram"
-    ), parse_mode='Markdown') # Added parse_mode='Markdown' here for consistency
+    ), parse_mode='Markdown')
 
         keyboard = [[InlineKeyboardButton("📤 Submit Screenshots", callback_data='submit_sharing_screenshots')]]
         await context.bot.send_message(chat_id=user_id,
