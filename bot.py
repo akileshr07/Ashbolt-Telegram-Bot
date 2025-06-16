@@ -1,4 +1,4 @@
-import logging
+ import logging
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
@@ -8,212 +8,238 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN')
 ADMIN_ID = int(os.environ.get('ADMIN_ID')) # Convert to int
 UPI_ID = os.environ.get('UPI_ID')
 
-# Validate if environment variables are set
-if not BOT_TOKEN:
-    logging.error("BOT_TOKEN environment variable not set. Exiting.")
-    exit(1)
-if not ADMIN_ID:
-    logging.error("ADMIN_ID environment variable not set. Exiting.")
-    exit(1)
-if not UPI_ID:
-    logging.error("UPI_ID environment variable not set. Exiting.")
-    exit(1)
-
 # ✅ Logger
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO)
+    level=logging.INFO
+)
 
 # ✅ User State
 user_state = {}
 user_screenshot_counter = {}
 
-# ✅ Helper: Notify admin
+# Global app instance
+app = None
 
-def notify_admin(bot_instance: Bot, user, message):
+def notify_admin(user, message, photo=None):
+    """Helper function to notify admin about user actions, optionally with a photo"""
     admin_message = f"👤 User Action: {message}\n"
     admin_message += f"🆔 ID: {user.id}\n"
     admin_message += f"👤 Name: {user.first_name}"
     admin_message += f" {user.last_name}" if user.last_name else ""
     admin_message += f"\n📧 Username: @{user.username}" if user.username else "\n📧 Username: N/A"
 
-    try:
-        bot_instance.send_message(chat_id=ADMIN_ID, text=admin_message)
-    except Exception as e:
-        logging.error(f"Failed to notify admin: {e}")
+    import asyncio
+    if app:
+        if photo:
+            asyncio.create_task(app.bot.send_photo(chat_id=ADMIN_ID, photo=photo, caption=admin_message))
+        else:
+            asyncio.create_task(app.bot.send_message(chat_id=ADMIN_ID, text=admin_message))
 
-# ✅ /start
-
-def start(update: Update, context: CallbackContext):
+# ✅ /start command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     keyboard = [[InlineKeyboardButton("🔥 Buy Course At Just ₹29", callback_data='buy')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(
+    await update.message.reply_text(
         f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\nClick 'Buy Course' to start your journey!",
         reply_markup=reply_markup
     )
-    notify_admin(context.bot, user, "Started the bot")
 
-# ✅ Callback Buttons
-
-def button_handler(update: Update, context: CallbackContext):
+# ✅ Promo Flow (Buy)
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     user = query.from_user
+    user_id = query.message.chat_id
 
     if query.data == 'buy':
-        notify_admin(context.bot, user, "Clicked 'Buy Course' button")
+        notify_admin(user, "Clicked 'Buy Course' button")
 
-        query.message.reply_text(
+        await query.message.reply_text(
             "🔥 Namaste React Course — Just ₹29!\n"
             "🚀 Limited Time Offer – Act Fast!\n\n"
-            "🎯 Learn React from Scratch with Lifetime Access, Projects, Notes & More!\n\n"
-            "📌 How to Unlock the Discount:\n"
-            "1️⃣ Share the promo message (below) to 3 Telegram or WhatsApp groups\n"
-            "2️⃣ Take screenshots\n"
-            "3️⃣ Send them here via 📤 Submit Screenshots button\n\n"
-            "📲 Join the Channel: https://t.me/+IEY3uiiKHfU4NzQ1\n\n"
-            "❓ If you have any doubts, feel free to contact the admin 👉 @iam_akilesh07"
+            f"💸 Please pay ₹29 to:\n\n💰 *{UPI_ID}*",
+            parse_mode='Markdown'
+        )
+
+        await context.bot.send_photo(
+            chat_id=user_id,
+            photo="https://i.postimg.cc/3N67GnpM/qr.jpg",
+            caption="📷 Scan this QR to pay ₹29"
+        )
+
+        keyboard = [[InlineKeyboardButton("📥 Send Payment Receipt", callback_data='send_receipt')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⬇️ Click the button below *after* making the payment, or simply send the screenshot now.",
+            reply_markup=reply_markup
+        )
+        user_state[user_id] = "ready_to_receive_payment"
+
+    elif query.data == 'send_receipt':
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="📥 Please send your payment screenshot now."
+        )
+        user_state[user_id] = "ready_to_receive_payment"
+
+    elif query.data == 'submit_sharing_screenshots':
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="📤 Please upload your 3 screenshot proofs of sharing here one by one."
+        )
+        user_state[user_id] = "collecting_screenshots"
+        user_screenshot_counter[user_id] = 0
+
+# ✅ Handle Photos
+async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.chat_id
+    user = update.message.from_user
+    photo_file_id = update.message.photo[-1].file_id
+
+    if user_state.get(user_id) == "ready_to_receive_payment":
+        user_state[user_id] = "payment_received"
+
+        admin_message = f"🆕 Payment Receipt from User:\n"
+        admin_message += f"👤 Name: {user.first_name} {user.last_name if user.last_name else ''}\n"
+        admin_message += f"🆔 ID: {user.id}\n"
+        admin_message += f"📧 Username: @{user.username if user.username else 'N/A'}\n\n"
+        admin_message += "⬇️ Payment Screenshot:"
+
+        await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id, caption=admin_message)
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=("✅ Payment receipt received!\n\n"
+                  "📩 Your payment is under initial processing. "
+                  "Now, let's complete the final step for discount!\n\n"
+                  "⏳ Please wait for instructions...")
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                "🎯 To unlock the discount and get your course:\n"
+                "1️⃣ Share the promo message (below) to 3 Telegram groups or WhatsApp groups\n"
+                "2️⃣ Take screenshots of your shares\n"
+                "3️⃣ Send them here via the 'Submit Screenshots' button\n\n"
+                "📲 Join the Channel: https://t.me/+IEY3uiiKHfU4NzQ1"
+            )
         )
 
         image_url = "https://i.postimg.cc/nVYkp19r/6213087660646450101-120.jpg"
-        context.bot.send_photo(
-            chat_id=query.message.chat_id,
-            photo=image_url,
-            caption=("💻 Namaste React Course by Akshay Saini – Just $0.35 / ₹29\n"
-                     "🎯 50+ Hours of Project-Based Learning\n\n"
-                     "🚀 Includes 3 Major Projects + Interview Prep\n\n"
-                     "👨‍💻 Perfect for Beginners & Experienced Developers\n\n"
-                     "🎯 Lifetime Access | Projects | Notes\n\n"
-                     "🔗 Join Now 👉 https://t.me/ashbolt_bot\n"
-                     "📲 Or Search 'ashbolt_bot' on Telegram\n"
-                     "🚀 Limited Time Offer")
-        )
-
-        keyboard = [[InlineKeyboardButton("📤 Submit Screenshots", callback_data='submit')]]
-        context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text="👇 Now you can submit your 3 screenshots below 👇",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
-    elif query.data == 'submit':
-        user_state[user.id] = "collecting_screenshots"
-        user_screenshot_counter[user.id] = 0
-        context.bot.send_message(chat_id=query.message.chat_id, text="📤 Please upload your 3 screenshots now.")
-
-    elif query.data == 'send_receipt':
-        user_state[user.id] = "ready_to_receive_payment"
-        context.bot.send_message(chat_id=query.message.chat_id, text="📥 Please send your payment screenshot now.")
-
-# ✅ Handle Photo Messages
-
-def handle_photos(update: Update, context: CallbackContext):
-    user_id = update.message.from_user.id
-    user = update.message.from_user
-
-    if user_state.get(user_id) == "collecting_screenshots":
-        user_screenshot_counter[user_id] += 1
-        context.bot.send_message(chat_id=user_id, text=f"✅ Screenshot {user_screenshot_counter[user_id]} received!")
-
-        if user_screenshot_counter[user_id] >= 3:
-            user_state[user_id] = "awaiting_payment"
-            notify_admin(context.bot, user, "Submitted 3 screenshots")
-
-            context.bot.send_message(
-                chat_id=user_id,
-                text=(f"✅ All 3 screenshots received!\n\n"
-                      f"💸 Now pay ₹29 to:\n\n💰 *{UPI_ID}*\n\n"
-                      f"❓ If you have any doubts, feel free to contact the admin 👉 @iam_akilesh07"),
-                parse_mode='Markdown'
-            )
-            context.bot.send_photo(
-                chat_id=user_id,
-                photo="https://i.postimg.cc/3N67GnpM/qr.jpg",
-                caption=("📷 Scan this QR to pay ₹29\n\n"
-                         "❓ If you have any doubts, feel free to contact the admin 👉 @iam_akilesh07")
-            )
-
-            keyboard = [[InlineKeyboardButton("📥 Send Payment Receipt", callback_data='send_receipt')]]
-            context.bot.send_message(
-                chat_id=user_id,
-                text="⬇️ Click the button below after making the payment",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-
-    elif user_state.get(user_id) == "ready_to_receive_payment":
-        user_state[user_id] = "awaiting_verification"
-
-        admin_message = f"🆕 Payment Receipt from {user.first_name}\n"
-        admin_message += f"👤 ID: {user.id}\n"
-        admin_message += f"📧 Username: @{user.username if user.username else 'N/A'}\n"
-        admin_message += "⬇️ Payment Screenshot:"
-
-        context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
-        context.bot.forward_message(chat_id=ADMIN_ID, from_chat_id=user_id, message_id=update.message.message_id)
-
-        context.bot.send_message(
+        await context.bot.send_photo(
             chat_id=user_id,
-            text=("✅ Payment receipt received!\n\n"
-                  "📩 Your payment is under verification. You'll receive the course link shortly after manual verification.\n\n"
-                  "⏳ Please wait up to 24 hours.")
+            photo=image_url,
+            caption=(
+                "💻 Namaste React Course by Akshay Saini – Just $0.35 / ₹29\n"
+                "🎯 50+ Hours of Project-Based Learning\n\n"
+                "🚀 Includes 3 Major Projects + Interview Prep\n\n"
+                "👨‍💻 Perfect for Beginners & Experienced Developer\n\n"
+                "🎯 Lifetime Access | Projects | Notes\n\n"
+                "🔗 Join Now 👉 https://t.me/ashbolt_bot\n"
+                "📲 Or Search 'ashbolt_bot' on Telegram\n"
+                "🚀 Limited Time Offer"
+            )
         )
 
-# ✅ Admin command
+        keyboard = [[InlineKeyboardButton("📤 Submit Screenshots", callback_data='submit_sharing_screenshots')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="👇 Now you can submit your 3 sharing screenshots below 👇",
+            reply_markup=reply_markup
+        )
+        user_state[user_id] = "awaiting_sharing_button_click"
 
-def send_course_link(update: Update, context: CallbackContext):
+    elif user_state.get(user_id) == "collecting_screenshots":
+        user_screenshot_counter[user_id] += 1
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"✅ Sharing Screenshot {user_screenshot_counter[user_id]} received!"
+        )
+
+        admin_message = f"📸 Sharing Screenshot {user_screenshot_counter[user_id]} from User:\n"
+        admin_message += f"👤 Name: {user.first_name} {user.last_name if user.last_name else ''}\n"
+        admin_message += f"🆔 ID: {user.id}\n"
+        admin_message += f"📧 Username: @{user.username if user.username else 'N/A'}\n"
+
+        await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id, caption=admin_message)
+
+        if user_screenshot_counter[user_id] == 3:
+            notify_admin(user, "Submitted all 3 sharing screenshots")
+            user_state[user_id] = "awaiting_admin_verification"
+
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=("✅ All 3 sharing screenshots received!\n\n"
+                      "📩 Both your payment and sharing proofs are now under verification. "
+                      "You'll receive the course access link shortly after manual verification.\n\n"
+                      "⏳ Please wait for confirmation (usually within 24 hours).")
+            )
+    else:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="🤔 I'm not expecting a photo right now. Please follow the instructions or use /start."
+        )
+
+# ✅ Admin Command: /send_link
+async def send_course_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id == ADMIN_ID:
         try:
             user_id = int(context.args[0])
             link = context.args[1]
             password = context.args[2]
 
-            context.bot.send_message(
+            await context.bot.send_message(
                 chat_id=user_id,
-                text=(f"🎉 Your payment has been verified!\n\n"
-                      f"🎓 Course Access:\n🔗 {link}\n🔑 Password: {password}\n\nEnjoy learning! 😊")
+                text=(
+                    f"🎉 Your payment and sharing proofs have been verified!\n\n"
+                    f"🎓 Here is your course access:\n"
+                    f"🔗 {link}\n"
+                    f"🔑 Password: {password}\n\n"
+                    f"Enjoy learning! 😊"
+                )
             )
-            update.message.reply_text("✅ Course link sent successfully!")
+
+            await update.message.reply_text(f"✅ Course link sent successfully to user {user_id}")
+
+            if user_id in user_state:
+                del user_state[user_id]
+            if user_id in user_screenshot_counter:
+                del user_screenshot_counter[user_id]
+
         except (IndexError, ValueError):
-            update.message.reply_text("❌ Usage: /send_link <user_id> <link> <password>")
+            await update.message.reply_text("❌ Usage: /send_link <user_id> <link> <password>")
     else:
-        update.message.reply_text("❌ Unauthorized")
+        await update.message.reply_text("❌ Unauthorized access.")
 
-# ✅ Fallbacks
+# ✅ /submit fallback
+async def submit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Please use the buttons provided in the flow. Use /start to restart if stuck.")
 
-def submit_command(update: Update, context: CallbackContext):
-    update.message.reply_text("📤 Please click '📤 Submit Screenshots' button above.")
+# ✅ Unknown command
+async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Unknown command. Use /start or tap buttons.")
 
-def unknown_command(update: Update, context: CallbackContext):
-    update.message.reply_text("❌ Unknown command. Use /start or buttons.")
-
-# ✅ Main Runner
-
+# ✅ Main runner
 def run_bot():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    global app
+    app = Application.builder().token(BOT_TOKEN).build()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("submit", submit_command))
-    dp.add_handler(CommandHandler("send_link", send_course_link))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("submit", submit_command))
+    app.add_handler(CommandHandler("send_link", send_course_link))
 
-    dp.add_handler(CallbackQueryHandler(button_handler))
-    dp.add_handler(MessageHandler(Filters.photo, handle_photos))
-    dp.add_handler(MessageHandler(Filters.command, unknown_command))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photos))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_command))
 
-    PORT = int(os.environ.get('PORT', '8443'))
-    APP_NAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+    print("🤖 Bot is running...")
+    app.run_polling()
 
-    if APP_NAME:
-        webhook_url = f"https://{APP_NAME}/{BOT_TOKEN}"
-        updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=BOT_TOKEN, webhook_url=webhook_url)
-        updater.bot.set_webhook(webhook_url)
-    else:
-        updater.start_polling()
-
-    updater.idle()
-
-# ✅ Entry
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_bot()
