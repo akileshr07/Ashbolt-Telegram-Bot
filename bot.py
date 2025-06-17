@@ -113,6 +113,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Store the selected course info temporarily so we can resume after getting phone number
         context.user_data['selected_course_info'] = {'message': selected_option_message, 'amount': amount_to_pay}
 
+# ---------- Place handle_contact function BEFORE its usage in add_handler ----------
 async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.chat_id
     user = update.message.from_user
