@@ -1,7 +1,7 @@
 import os
 import logging
 from fastapi import FastAPI, Request, HTTPException
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application, CallbackQueryHandler, CommandHandler,
     MessageHandler, ContextTypes, filters
@@ -28,11 +28,13 @@ user_state = {}
 user_screenshot_counter = {}
 
 # ---------- Common Functions ----------
-def notify_admin(user, message, photo=None):
+def notify_admin(user, message, photo=None, phone_number=None):
     admin_message = f"👤 User Action: {message}\n"
     admin_message += f"🆔 ID: {user.id}\n"
     admin_message += f"👤 Name: {user.first_name} {user.last_name or ''}\n"
-    admin_message += f"📧 Username: @{user.username or 'N/A'}"
+    admin_message += f"📧 Username: @{user.username or 'N/A'}\n"
+    if phone_number:
+        admin_message += f"📱 Phone: {phone_number}\n" # Add phone number if provided
 
     async def send():
         if photo:
@@ -88,13 +90,51 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_screenshot_counter[user_id] = 0
         return # Exit to prevent showing payment details again
 
-
     # If any of the 'buy' options were clicked
     if selected_option_message:
         notify_admin(user, f"User {selected_option_message}")
+
+        # Ask for phone number using a ReplyKeyboardMarkup
+        phone_keyboard = ReplyKeyboardMarkup(
+            [[KeyboardButton("Share My Phone Number", request_contact=True)]],
+            one_time_keyboard=True,
+            resize_keyboard=True
+        )
+
         await query.message.reply_text(
-            f"🔥 You selected: {selected_option_message.split('chose ')[1].capitalize()}\n"
-            f"💸 Pay {amount_to_pay} to:\n\n💰 *{UPI_ID}*", parse_mode='Markdown'
+            f"🔥 You selected: {selected_option_message.split('chose ')[1].capitalize()}\n\n"
+            "To proceed, please share your phone number with us. "
+            "This will help us contact you for further assistance or course delivery.\n\n"
+            "Press the button below to share your contact:",
+            reply_markup=phone_keyboard
+        )
+        # Set state to await phone number
+        user_state[user_id] = "awaiting_phone_number"
+        # Store the selected course info temporarily so we can resume after getting phone number
+        context.user_data['selected_course_info'] = {'message': selected_option_message, 'amount': amount_to_pay}
+
+async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.chat_id
+    user = update.message.from_user
+    contact = update.message.contact
+
+    # Check if the user is in the state where we expect a phone number
+    if user_state.get(user_id) == "awaiting_phone_number" and contact:
+        phone_number = contact.phone_number
+        notify_admin(user, "User shared phone number", phone_number=phone_number)
+        
+        await update.message.reply_text(
+            "✅ Thank you for sharing your phone number!",
+            reply_markup=ReplyKeyboardRemove() # Remove the special keyboard
+        )
+
+        # Retrieve the temporarily stored course info
+        selected_option_message = context.user_data.get('selected_course_info', {}).get('message', 'N/A course')
+        amount_to_pay = context.user_data.get('selected_course_info', {}).get('amount', '₹29')
+        
+        # Now, proceed with the payment instructions
+        await context.bot.send_message(chat_id=user_id,
+            text=f"💸 Pay {amount_to_pay} to:\n\n💰 *{UPI_ID}*", parse_mode='Markdown'
         )
         await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/3N67GnpM/qr.jpg",
                                      caption=f"📷 Scan this QR to pay {amount_to_pay}")
@@ -104,6 +144,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         user_state[user_id] = "ready_to_receive_payment"
+        # Clear the temporarily stored course info
+        if 'selected_course_info' in context.user_data:
+            del context.user_data['selected_course_info']
+    else:
+        await update.message.reply_text("🤔 Unexpected contact sharing. Please use /start to follow the proper flow.")
 
 
 async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -122,19 +167,32 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                        parse_mode='Markdown')
 
         # Now, proceed with the course details and sharing instructions.
-        await context.bot.send_message(chat_id=user_id,
-            text="Awesome! As part of the course offer, please share the promo message with image in 3 Telegram  groups and take screenshots of your shares.")
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                "🎉 *Awesome!* To unlock the course, please share the promo message with image in *3 Telegram groups* and send *screenshots* here.\n\n"
+                "📢 *Share Only In:*\n"
+                "• 🎓 College / Junior groups\n"
+                "• 📚 Study / Placement groups\n"
+                "• 👨‍💻 Coding groups like @knacademydeloitte, @onlinestudy4ubatch2024, Prime Coding, etc.\n\n"
+                "❌ *Don't Share In:*\n"
+                "• Personal / family / unrelated groups\n\n"
+                "⚠️ *Warning:* Irrelevant sharing may lead to *access removal*. Support genuine learners only."
+            ),
+            parse_mode="Markdown"
+        )
 
-        await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/63d8vMq3/Whats-App-Image-2025-06-16-at-20-24-36-af8e4ee8.jpg",
-                                     caption=(
-        "🚀 *Top Namaste Dev Courses for Just ₹29!*\n"
-        "🔥 Namaste React • Frontend System Design • Node.js\n"
-        "🎓 By Akshay Saini (Ex-Uber) – Real Projects + Career Prep\n\n"
-        "💥 *Only ₹29 Each* or *₹69 for All 3!*\n"
-        "📚 One-Time Access • Lifetime Learning\n\n"
-        "🔗 *Join 👉 https://t.me/ashbolt_bot*\n"
-        "🤖 Or *Search:* *ashbolt_bot* on Telegram"
-    ), parse_mode='Markdown')
+        await context.bot.send_photo(
+            chat_id=user_id,
+            photo="https://i.postimg.cc/NfGX2Dfd/Web-Photo-Editor.jpg",
+            caption=(
+                "🚀 *Akshay Saini's Dev Courses for just ₹29!*\n"
+                "💡 Includes: React, Frontend System Design, Node.js\n"
+                "📚 Access once, learn forever (with real projects)\n\n"
+                "👉 To get it: *search* 🔍 *ashbolt_bot* on Telegram"
+            ),
+            parse_mode='Markdown'
+        )
 
         keyboard = [[InlineKeyboardButton("📤 Submit Screenshots", callback_data='submit_sharing_screenshots')]]
         await context.bot.send_message(chat_id=user_id,
@@ -154,11 +212,11 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_screenshot_counter[user_id] == 3:
             user_state[user_id] = "awaiting_admin_verification"
             await context.bot.send_message(chat_id=user_id,
-                text="✅ All 3 screenshots received. We'll verify and send access soon!")
+                text="✅ All 3 screenshots received. We'll verify and send access soon! if u dont get any updates after 8hrs Contact admin for help @iam_akilesh07 ")
 
     else:
         await context.bot.send_message(chat_id=user_id,
-            text="🤔 Unexpected photo. Please use /start to follow the proper flow.")
+            text="🤔 Unexpected photo. Please use /start to follow the proper flow. Contact admin for help @iam_akilesh07")
 
 async def send_course_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id == ADMIN_ID:
@@ -186,8 +244,11 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("send_link", send_course_link))
 bot_app.add_handler(CallbackQueryHandler(button_handler))
+# New handler for when user shares their contact
+bot_app.add_handler(MessageHandler(filters.CONTACT & filters.PRIVATE, handle_contact))
 bot_app.add_handler(MessageHandler(filters.PHOTO, handle_photos))
 bot_app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
+bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_command)) # Catch any other text
 
 # ---------- Webhook endpoint ----------
 @fastapi_app.post(f"/{WEBHOOK_SECRET_TOKEN}")
