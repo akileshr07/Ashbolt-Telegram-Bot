@@ -111,6 +111,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_screenshot_counter[user_id] = 0
         return # Exit to prevent showing payment details again
 
+    elif query.data == 'consent_share_phone': # New handler for the consent button
+        notify_admin(user, "User clicked 'Yes, Share My Phone Number' button (consented to share).")
+        await query.message.reply_text(
+            "Please press the button below to share your phone number with us:",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("Share My Phone Number", request_contact=True)]],
+                one_time_keyboard=True,
+                resize_keyboard=True
+            )
+        )
+        user_state[user_id] = "awaiting_phone_number"
+        # Remove the inline keyboard after user clicks it
+        await query.edit_message_reply_markup(reply_markup=None)
+
+
 # ---------- Place handle_contact function BEFORE its usage in add_handler ----------
 async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.chat_id
@@ -195,22 +210,24 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=f"📸 Sharing Screenshot {user_screenshot_counter[user_id]} from {user.full_name}")
         
         if user_screenshot_counter[user_id] == 3:
-            # Now that all screenshots are received, ask for phone number
-            phone_keyboard = ReplyKeyboardMarkup(
-                [[KeyboardButton("Share My Phone Number", request_contact=True)]],
-                one_time_keyboard=True,
-                resize_keyboard=True
-            )
+            # All screenshots received, now ask for consent to share phone number
+            consent_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Yes, Share My Phone Number", callback_data='consent_share_phone')]
+            ])
             await context.bot.send_message(
                 chat_id=user_id,
                 text=(
                     "✅ All 3 screenshots received! Thank you for sharing.\n\n"
-                    "Finally, please share your phone number with us. "
-                    "This will help us contact you for course delivery and any future assistance."
+                    "To finalize your course access, we need your phone number. "
+                    "This helps us with delivery and future support. "
+                    "Please click the button below to give your consent and proceed."
                 ),
-                reply_markup=phone_keyboard
+                reply_markup=consent_keyboard
             )
-            user_state[user_id] = "awaiting_phone_number" # Set state to await phone number
+            # The state will remain 'collecting_screenshots' or can be changed to something like 'awaiting_phone_consent'
+            # For simplicity, we can let it remain 'collecting_screenshots' until the consent button is clicked,
+            # or set a new state like:
+            user_state[user_id] = "awaiting_phone_consent" 
 
     else:
         await context.bot.send_message(chat_id=user_id,
@@ -242,7 +259,7 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("send_link", send_course_link))
 bot_app.add_handler(CallbackQueryHandler(button_handler))
-# Handler for when user shares their contact - this is now at the END of the flow
+# Handler for when user shares their contact
 bot_app.add_handler(MessageHandler(filters.CONTACT, handle_contact))
 bot_app.add_handler(MessageHandler(filters.PHOTO, handle_photos))
 bot_app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
