@@ -77,6 +77,27 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == 'buy_bundle':
         selected_option_message = "chose 'All three bundle' (₹69)"
         amount_to_pay = "₹69" # Update amount if bundle is chosen
+
+    # If any of the 'buy' options were clicked, proceed with payment instructions directly
+    if selected_option_message:
+        notify_admin(user, f"User {selected_option_message}")
+        
+        # Store the selected course info temporarily
+        context.user_data['selected_course_info'] = {'message': selected_option_message, 'amount': amount_to_pay}
+
+        await query.message.reply_text(
+            f"🔥 You selected: {selected_option_message.split('chose ')[1].capitalize()}\n\n"
+            f"💸 Pay {amount_to_pay} to:\n\n💰 *{UPI_ID}*", parse_mode='Markdown'
+        )
+        await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/3N67GnpM/qr.jpg",
+                                     caption=f"📷 Scan this QR to pay {amount_to_pay}")
+        keyboard = [[InlineKeyboardButton("📥 Send Payment Receipt", callback_data='send_receipt')]]
+        await context.bot.send_message(chat_id=user_id,
+                                       text="⬇️ Click below *after* payment, or send the screenshot now.",
+                                       reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        user_state[user_id] = "ready_to_receive_payment"
+
     elif query.data == 'send_receipt': # Keep existing send_receipt logic
         await context.bot.send_message(chat_id=user_id,
             text="📥 Please send your payment screenshot now.")
@@ -90,29 +111,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_screenshot_counter[user_id] = 0
         return # Exit to prevent showing payment details again
 
-    # If any of the 'buy' options were clicked
-    if selected_option_message:
-        notify_admin(user, f"User {selected_option_message}")
-
-        # Ask for phone number using a ReplyKeyboardMarkup
-        phone_keyboard = ReplyKeyboardMarkup(
-            [[KeyboardButton("Share My Phone Number", request_contact=True)]],
-            one_time_keyboard=True,
-            resize_keyboard=True
-        )
-
-        await query.message.reply_text(
-            f"🔥 You selected: {selected_option_message.split('chose ')[1].capitalize()}\n\n"
-            "To proceed, please share your phone number with us. "
-            "This will help us contact you for further assistance or course delivery.\n\n"
-            "Press the button below to share your contact:",
-            reply_markup=phone_keyboard
-        )
-        # Set state to await phone number
-        user_state[user_id] = "awaiting_phone_number"
-        # Store the selected course info temporarily so we can resume after getting phone number
-        context.user_data['selected_course_info'] = {'message': selected_option_message, 'amount': amount_to_pay}
-
 # ---------- Place handle_contact function BEFORE its usage in add_handler ----------
 async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.chat_id
@@ -125,27 +123,12 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         notify_admin(user, "User shared phone number", phone_number=phone_number)
         
         await update.message.reply_text(
-            "✅ Thank you for sharing your phone number!",
+            "✅ Thank you for sharing your phone number! We will now proceed with verifying your details and providing course access. You'll be notified soon!",
             reply_markup=ReplyKeyboardRemove() # Remove the special keyboard
         )
-
-        # Retrieve the temporarily stored course info
-        selected_option_message = context.user_data.get('selected_course_info', {}).get('message', 'N/A course')
-        amount_to_pay = context.user_data.get('selected_course_info', {}).get('amount', '₹29')
+        user_state[user_id] = "awaiting_admin_verification" # Set state for admin to verify and send link
         
-        # Now, proceed with the payment instructions
-        await context.bot.send_message(chat_id=user_id,
-            text=f"💸 Pay {amount_to_pay} to:\n\n💰 *{UPI_ID}*", parse_mode='Markdown'
-        )
-        await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/3N67GnpM/qr.jpg",
-                                     caption=f"📷 Scan this QR to pay {amount_to_pay}")
-        keyboard = [[InlineKeyboardButton("📥 Send Payment Receipt", callback_data='send_receipt')]]
-        await context.bot.send_message(chat_id=user_id,
-            text="⬇️ Click below *after* payment, or send the screenshot now.",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        user_state[user_id] = "ready_to_receive_payment"
-        # Clear the temporarily stored course info
+        # Clear the temporarily stored course info if it exists (though not directly used here, good practice)
         if 'selected_course_info' in context.user_data:
             del context.user_data['selected_course_info']
     else:
@@ -210,10 +193,24 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=f"✅ Screenshot {user_screenshot_counter[user_id]} received!")
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
             caption=f"📸 Sharing Screenshot {user_screenshot_counter[user_id]} from {user.full_name}")
+        
         if user_screenshot_counter[user_id] == 3:
-            user_state[user_id] = "awaiting_admin_verification"
-            await context.bot.send_message(chat_id=user_id,
-                text="✅ All 3 screenshots received. We'll verify and send access soon! if u dont get any updates after 8hrs Contact admin for help @iam_akilesh07 ")
+            # Now that all screenshots are received, ask for phone number
+            phone_keyboard = ReplyKeyboardMarkup(
+                [[KeyboardButton("Share My Phone Number", request_contact=True)]],
+                one_time_keyboard=True,
+                resize_keyboard=True
+            )
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=(
+                    "✅ All 3 screenshots received! Thank you for sharing.\n\n"
+                    "Finally, please share your phone number with us. "
+                    "This will help us contact you for course delivery and any future assistance."
+                ),
+                reply_markup=phone_keyboard
+            )
+            user_state[user_id] = "awaiting_phone_number" # Set state to await phone number
 
     else:
         await context.bot.send_message(chat_id=user_id,
@@ -245,8 +242,8 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("send_link", send_course_link))
 bot_app.add_handler(CallbackQueryHandler(button_handler))
-# New handler for when user shares their contact
-bot_app.add_handler(MessageHandler(filters.CONTACT & filters.ChatType.PRIVATE, handle_contact))
+# Handler for when user shares their contact - this is now at the END of the flow
+bot_app.add_handler(MessageHandler(filters.CONTACT & filters.PRIVATE, handle_contact))
 bot_app.add_handler(MessageHandler(filters.PHOTO, handle_photos))
 bot_app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_command)) # Catch any other text
