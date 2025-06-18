@@ -243,7 +243,7 @@ bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("send_link", send_course_link))
 bot_app.add_handler(CallbackQueryHandler(button_handler))
 # Handler for when user shares their contact - this is now at the END of the flow
-bot_app.add_handler(MessageHandler(filters.CONTACT & filters.PRIVATE, handle_contact))
+bot_app.add_handler(MessageHandler(filters.CONTACT, handle_contact))
 bot_app.add_handler(MessageHandler(filters.PHOTO, handle_photos))
 bot_app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_command)) # Catch any other text
