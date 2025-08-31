@@ -192,7 +192,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                      caption=f"🧾 {payment_type} Payment from {user.full_name or user.username}")
 
         if state == "ready_to_receive_payment":
-            await context.bot.send_message(chat_id=user_id, text="✅ Payment received! Share promo screenshots or skip sharing.")
+            await context.bot.send_message(chat_id=user_id, text="✅ Payment received. Please follow the steps below to unlock the course. This is the last part of the course purchase. You can skip the sharing requirement by paying extra; there is an option for this below. After that, you need to share your contact details to receive course access.")
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("📤 Submit Screenshots", callback_data="submit_sharing_screenshots")],
                 [InlineKeyboardButton("🙅‍♂️ Don't Want to Share", callback_data="dont_want_to_share")]
