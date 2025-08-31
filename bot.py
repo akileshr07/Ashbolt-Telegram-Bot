@@ -82,35 +82,36 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_to_pay = "₹29"
         selected_option_message = ""
         if query.data == "buy_react":
-            selected_option_message = "Namaste React"
+            selected_option_message = "chose 'Namaste React' (₹29)"
         elif query.data == "buy_frontend_sd":
-            selected_option_message = "Namaste Frontend System Design"
+            selected_option_message = "chose 'Namaste Frontend System Design' (₹29)"
         elif query.data == "buy_nodejs":
-            selected_option_message = "Namaste Node.js"
+            selected_option_message = "chose 'Namaste Node.js' (₹29)"
         elif query.data == "buy_bundle":
-            selected_option_message = "All three bundle"
+            selected_option_message = "chose 'All three bundle' (₹69)"
             amount_to_pay = "₹69"
 
-        notify_admin_sync(user, f"User selected '{selected_option_message}' ({amount_to_pay})")
-        context.user_data['selected_course_info'] = {'course': selected_option_message, 'amount': amount_to_pay}
+        notify_admin_sync(user, f"User {selected_option_message}")
+        context.user_data['selected_course_info'] = {'message': selected_option_message, 'amount': amount_to_pay}
 
         # Payment instructions
         await query.message.reply_text(
-            f"🔥 You selected: {selected_option_message}\n💸 Pay {amount_to_pay} to: *{UPI_ID}*",
+            f"🔥 You selected: {selected_option_message.split('chose ')[1].capitalize()}\n\n"
+            f"💸 Pay {amount_to_pay} to:\n\n💰 *{UPI_ID}*",
             parse_mode="Markdown"
         )
         await context.bot.send_photo(chat_id=user_id, photo="https://i.postimg.cc/3N67GnpM/qr.jpg",
                                      caption=f"📷 Scan this QR to pay {amount_to_pay}")
         await context.bot.send_message(
             chat_id=user_id,
-            text="⬇️ Click below after payment, or send the screenshot now.",
+            text="⬇️ Click below *after* payment, or send the screenshot now.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📥 Send Payment Receipt", callback_data="send_receipt")]]),
             parse_mode="Markdown"
         )
         user_state[user_id] = "ready_to_receive_payment"
         return
 
-    # ---------- Payment Receipt ----------
+    # ---------- Send Payment Receipt ----------
     if query.data in ("send_receipt", "send_receipt_skip"):
         if query.data == "send_receipt":
             user_state[user_id] = "ready_to_receive_payment"
@@ -131,7 +132,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "consent_share_phone":
         notify_admin_sync(user, "User consented to share phone number")
         await query.message.reply_text(
-            "Please press the button below to share your phone number:",
+            "Please press the button below to share your phone number with us:",
             reply_markup=ReplyKeyboardMarkup(
                 [[KeyboardButton("Share My Phone Number", request_contact=True)]],
                 one_time_keyboard=True,
@@ -186,32 +187,61 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo_file_id = update.message.photo[-1].file_id
     state = user_state.get(user_id)
 
-    if state in ("ready_to_receive_payment", "ready_to_receive_payment_skip"):
-        payment_type = "Skip ₹50" if state == "ready_to_receive_payment_skip" else "Standard"
+    # --- Standard Payment ---
+    if state == "ready_to_receive_payment":
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
-                                     caption=f"🧾 {payment_type} Payment from {user.full_name or user.username}")
+                                     caption=f"🧾 Payment from {user.full_name or user.username}")
+        await context.bot.send_message(chat_id=user_id, text="✅ Payment received. Please follow the steps below to unlock the course. This is the last part of the course purchase. You can skip the sharing requirement by paying extra; there is an option for this below. After that, you need to share your contact details to receive course access.")
 
-        if state == "ready_to_receive_payment":
-            await context.bot.send_message(chat_id=user_id, text="✅ Payment received. Please follow the steps below to unlock the course. This is the last part of the course purchase. You can skip the sharing requirement by paying extra; there is an option for this below. After that, you need to share your contact details to receive course access.")
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("📤 Submit Screenshots", callback_data="submit_sharing_screenshots")],
-                [InlineKeyboardButton("🙅‍♂️ Don't Want to Share", callback_data="dont_want_to_share")]
-            ])
-            await context.bot.send_message(chat_id=user_id, text="Choose one:", reply_markup=keyboard)
-            user_state[user_id] = "awaiting_sharing_button_click"
-        else:
-            # Skip payment path
-            consent_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✅ Yes, Share My Phone Number", callback_data="consent_share_phone")]
-            ])
-            await context.bot.send_message(
-                chat_id=user_id,
-                text="✅ Payment received! Please share your phone number to finalize course access:",
-                reply_markup=consent_keyboard
+        # Show sharing instructions
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                "🎉 To unlock the course, share the promo in 3 Telegram groups and send screenshots.\n"
+                "⚠️ Don't share in personal/unrelated groups."
             )
-            user_state[user_id] = "awaiting_phone_consent"
+        )
+        await context.bot.send_photo(
+            chat_id=user_id,
+            photo="https://i.postimg.cc/NfGX2Dfd/Web-Photo-Editor.jpg",
+            caption = (
+    "🚀 Akshay Saini's Dev Courses for just ₹29\n\n"
+    "📚 Includes:\n"
+    "   - React\n"
+    "   - Frontend System Design\n"
+    "   - Node.js\n\n"
+    "⚡ Access once, learn forever (with real projects)\n\n"
+    "👉 To get it: Search **ashbolt_bot** on Telegram"
+)
+
+        )
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📤 Submit Screenshots", callback_data="submit_sharing_screenshots")],
+            [InlineKeyboardButton("🙅‍♂️ Don't Want to Share", callback_data="dont_want_to_share")]
+        ])
+        await context.bot.send_message(chat_id=user_id, text="Choose one:", reply_markup=keyboard)
+        user_state[user_id] = "awaiting_sharing_button_click"
         return
 
+    # --- Skip ₹50 Payment ---
+    if state == "ready_to_receive_payment_skip":
+        await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
+                                     caption=f"🧾 Skip-sharing Payment ₹50 from {user.full_name or user.username}")
+        # Ask for phone consent
+        consent_keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Yes, Share My Phone Number", callback_data="consent_share_phone")]
+        ])
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="✅ Payment received! To finalize your course access, please share your phone number:",
+            reply_markup=consent_keyboard
+        )
+        user_state[user_id] = "awaiting_phone_consent"
+        context.user_data.pop('selected_course_info', None)
+        user_screenshot_counter.pop(user_id, None)
+        return
+
+    # --- Collecting Sharing Screenshots ---
     if state == "collecting_screenshots":
         count = user_screenshot_counter.get(user_id, 0) + 1
         user_screenshot_counter[user_id] = count
@@ -231,13 +261,15 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_state[user_id] = "awaiting_phone_consent"
         return
 
-    await context.bot.send_message(chat_id=user_id, text="🤔 Unexpected photo. Use /start to follow the proper flow.")
+    await context.bot.send_message(chat_id=user_id,
+                                   text="🤔 Unexpected photo. Use /start to follow the proper flow.")
 
 # ----------------- Admin Send Course -----------------
 async def send_course_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id != ADMIN_ID:
         await update.message.reply_text("❌ Unauthorized")
         return
+
     try:
         user_id = int(context.args[0])
         link = context.args[1]
