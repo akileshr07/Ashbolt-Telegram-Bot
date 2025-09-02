@@ -1,6 +1,7 @@
 import os
 import logging
 import asyncio
+from datetime import timedelta
 from fastapi import FastAPI, Request, HTTPException
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
@@ -56,6 +57,19 @@ def notify_admin_sync(user, message, photo=None, phone_number=None):
     except Exception:
         asyncio.create_task(send())
 
+# ----------------- Follow-up -----------------
+async def follow_up_message(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    await context.bot.send_message(
+        chat_id=job.chat_id,
+        text=(
+            "⏰ Hey! Just checking in.\n\n"
+            "Still thinking? Don’t miss premium dev courses for just ₹29.\n"
+            "Proof of courses: https://tinyurl.com/ashboltbot-course-proof\n\n"
+            "If you have any queries 👉 @iam_akilesh07"
+        )
+    )
+
 # ----------------- Handlers -----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
@@ -70,12 +84,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+    # Schedule follow-up after 6 hours
+    context.job_queue.run_once(
+        follow_up_message,
+        when=timedelta(minutes=3),
+        chat_id=update.effective_chat.id,
+        name=f"followup_{user.id}"
+    )
+
 # ----------------- Button Handler -----------------
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user = query.from_user
     user_id = query.message.chat_id
+
+    # Cancel follow-up if user proceeds to buy
+    jobs = context.job_queue.get_jobs_by_name(f"followup_{user.id}")
+    for job in jobs:
+        job.schedule_removal()
 
     # ---------- Course Selection ----------
     if query.data in ("buy_react", "buy_frontend_sd", "buy_nodejs", "buy_bundle"):
@@ -204,16 +231,15 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_photo(
             chat_id=user_id,
             photo="https://i.postimg.cc/NfGX2Dfd/Web-Photo-Editor.jpg",
-            caption = (
-    "🚀 Akshay Saini's Dev Courses for just ₹29\n\n"
-    "📚 Includes:\n"
-    "   - React\n"
-    "   - Frontend System Design\n"
-    "   - Node.js\n\n"
-    "⚡ Access once, learn forever (with real projects)\n\n"
-    "👉 To get it: Search **ashbolt_bot** on Telegram"
-)
-
+            caption=(
+                "🚀 Akshay Saini's Dev Courses for just ₹29\n\n"
+                "📚 Includes:\n"
+                "   - React\n"
+                "   - Frontend System Design\n"
+                "   - Node.js\n\n"
+                "⚡ Access once, learn forever (with real projects)\n\n"
+                "👉 To get it: Search **ashbolt_bot** on Telegram"
+            )
         )
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("📤 Submit Screenshots", callback_data="submit_sharing_screenshots")],
