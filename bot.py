@@ -233,7 +233,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         await context.bot.send_message(
             chat_id=user_id,
-            text="✅ Payment received! To finalize your course access, please share your phone number:",
+            text="✅ Payment received! To finalize your course access, please share your phone numberPayment done but no access? Ping @iam_akilesh07. Support in 24h.",
             reply_markup=consent_keyboard
         )
         user_state[user_id] = "awaiting_phone_consent"
