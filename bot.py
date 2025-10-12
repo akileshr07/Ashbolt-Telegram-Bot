@@ -60,10 +60,10 @@ def notify_admin_sync(user, message, photo=None, phone_number=None):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     keyboard = [
-        [InlineKeyboardButton("1. Namaste React ₹29", callback_data="buy_react")],
-        [InlineKeyboardButton("2. Namaste Frontend System Design ₹29", callback_data="buy_frontend_sd")],
+        [InlineKeyboardButton("1.Namaste DSA ₹49", callback_data="buy_dsa")],
+        [InlineKeyboardButton("2.  Namaste React ₹29", callback_data="buy_react")],
         [InlineKeyboardButton("3. Namaste Node.js ₹29", callback_data="buy_nodejs")],
-        [InlineKeyboardButton("4. Namaste DSA ₹49", callback_data="buy_dsa")],
+        [InlineKeyboardButton("4. Namaste Frontend System Design ₹29", callback_data="buy_frontend_sd")],
         [InlineKeyboardButton("5. All four bundle ₹99", callback_data="buy_bundle")]
     ]
     await update.message.reply_text(
