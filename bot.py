@@ -195,13 +195,13 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if state == "ready_to_receive_payment":
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
                                      caption=f"🧾 Payment from {user.full_name or user.username}")
-        await context.bot.send_message(chat_id=user_id, text="✅ Payment received. Please follow the steps below to unlock the course.")
+       await context.bot.send_message(chat_id=user_id, text="✅ Payment is under verfication. Please follow the steps below to unlock the course. This is the last part of the course purchase. You can skip the sharing requirement by paying extra; there is an option for this below. After that, you need to share your contact details to receive course access.")
 
         # Show sharing instructions
         await context.bot.send_message(
             chat_id=user_id,
             text=(
-                "🎉 To unlock the course, share the promo in 3 Telegram groups and send screenshots.\n"
+                "🎉 To unlock the course, share the below promo post to 3 Telegram groups and send screenshots.\n"
                 "⚠️ Don't share in personal/unrelated groups."
             )
         )
