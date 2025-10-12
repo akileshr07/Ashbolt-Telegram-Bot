@@ -60,8 +60,8 @@ def notify_admin_sync(user, message, photo=None, phone_number=None):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     keyboard = [
-        [InlineKeyboardButton("1.Namaste DSA ₹49", callback_data="buy_dsa")],
-        [InlineKeyboardButton("2.  Namaste React ₹29", callback_data="buy_react")],
+        [InlineKeyboardButton("1. Namaste DSA ₹49", callback_data="buy_dsa")],
+        [InlineKeyboardButton("2. Namaste React ₹29", callback_data="buy_react")],
         [InlineKeyboardButton("3. Namaste Node.js ₹29", callback_data="buy_nodejs")],
         [InlineKeyboardButton("4. Namaste Frontend System Design ₹29", callback_data="buy_frontend_sd")],
         [InlineKeyboardButton("5. All four bundle ₹99", callback_data="buy_bundle")]
@@ -98,7 +98,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         notify_admin_sync(user, f"User {selected_option_message}")
         context.user_data['selected_course_info'] = {'message': selected_option_message, 'amount': amount_to_pay}
 
-        # Payment instructions
         await query.message.reply_text(
             f"🔥 You selected: {selected_option_message.split('chose ')[1].capitalize()}\n\n"
             f"💸 Pay {amount_to_pay} to:\n\n💰 *{UPI_ID}*",
@@ -193,9 +192,30 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- Standard Payment ---
     if state == "ready_to_receive_payment":
-        await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
-                                     caption=f"🧾 Payment from {user.full_name or user.username}")
-       await context.bot.send_message(chat_id=user_id, text="✅ Payment is under verfication. Please follow the steps below to unlock the course. This is the last part of the course purchase. You can skip the sharing requirement by paying extra; there is an option for this below. After that, you need to share your contact details to receive course access.")
+        await context.bot.send_photo(
+            chat_id=ADMIN_ID,
+            photo=photo_file_id,
+            caption=f"🧾 Payment from {user.full_name or user.username}"
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="✅ Payment is under verification. Please follow the steps below to unlock the course. "
+                 "This is the last part of the course purchase. You can skip the sharing requirement by paying extra; "
+                 "there is an option for this below. After that, you need to share your contact details to receive course access."
+        )
+
+        # 🔥 Personal DM
+        username = f"@{user.username}" if user.username else "bro"
+        personal_text = (
+            f"👋 Hello {username},\n\n"
+            "💸 Your payment is under verification.\n"
+            "If you don’t get course access in 24h, contact 👉 @iam_akilesh07"
+        )
+        try:
+            await context.bot.send_message(chat_id=user.id, text=personal_text)
+        except Exception as e:
+            logger.warning(f"Failed to send personal message to {user.id}: {e}")
 
         # Show sharing instructions
         await context.bot.send_message(
@@ -231,14 +251,29 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if state == "ready_to_receive_payment_skip":
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
                                      caption=f"🧾 Skip-sharing Payment ₹50 from {user.full_name or user.username}")
+
         consent_keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Yes, Share My Phone Number", callback_data="consent_share_phone")]
         ])
+
         await context.bot.send_message(
             chat_id=user_id,
             text="✅ Payment received! To finalize your course access, please share your phone number.",
             reply_markup=consent_keyboard
         )
+
+        # 🔥 Personal DM for skip payment
+        username = f"@{user.username}" if user.username else "bro"
+        personal_text = (
+            f"👋 Hello {username},\n\n"
+            "💸 Your ₹50 skip-sharing payment is under verification.\n"
+            "If you don’t get course access in 24h, contact 👉 @iam_akilesh07"
+        )
+        try:
+            await context.bot.send_message(chat_id=user.id, text=personal_text)
+        except Exception as e:
+            logger.warning(f"Failed to send personal message to {user.id}: {e}")
+
         user_state[user_id] = "awaiting_phone_consent"
         context.user_data.pop('selected_course_info', None)
         user_screenshot_counter.pop(user_id, None)
@@ -264,8 +299,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_state[user_id] = "awaiting_phone_consent"
         return
 
-    await context.bot.send_message(chat_id=user_id,
-                                   text="🤔 Unexpected photo. Use /start to follow the proper flow.")
+    await context.bot.send_message(chat_id=user_id, text="🤔 Unexpected photo. Use /start to follow the proper flow.")
 
 # ----------------- Admin Send Course -----------------
 async def send_course_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
