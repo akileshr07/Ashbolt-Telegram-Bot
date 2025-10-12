@@ -207,9 +207,9 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await context.bot.send_photo(
             chat_id=user_id,
-            photo="https://i.postimg.cc/NfGX2Dfd/Web-Photo-Editor.jpg",
+            photo="https://i.postimg.cc/K8BPYMMD/Untitled-design.png",
             caption=(
-                "🚀 Akshay Saini's Dev Courses for just ₹29/₹49\n\n"
+                "🚀 Akshay Saini's Dev Courses for just ₹29\n\n"
                 "📚 Includes:\n"
                 "   - React\n"
                 "   - Frontend System Design\n"
