@@ -1,4 +1,4 @@
-import os
+ import os
 import logging
 import asyncio
 from fastapi import FastAPI, Request, HTTPException
@@ -63,7 +63,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("1. Namaste React ₹29", callback_data="buy_react")],
         [InlineKeyboardButton("2. Namaste Frontend System Design ₹29", callback_data="buy_frontend_sd")],
         [InlineKeyboardButton("3. Namaste Node.js ₹29", callback_data="buy_nodejs")],
-        [InlineKeyboardButton("4. All three bundle ₹69", callback_data="buy_bundle")]
+        [InlineKeyboardButton("4. Namaste DSA ₹49", callback_data="buy_dsa")],
+        [InlineKeyboardButton("5. All four bundle ₹99", callback_data="buy_bundle")]
     ]
     await update.message.reply_text(
         f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\nPlease choose a course option:",
@@ -78,7 +79,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.message.chat_id
 
     # ---------- Course Selection ----------
-    if query.data in ("buy_react", "buy_frontend_sd", "buy_nodejs", "buy_bundle"):
+    if query.data in ("buy_react", "buy_frontend_sd", "buy_nodejs", "buy_dsa", "buy_bundle"):
         amount_to_pay = "₹29"
         selected_option_message = ""
         if query.data == "buy_react":
@@ -87,9 +88,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             selected_option_message = "chose 'Namaste Frontend System Design' (₹29)"
         elif query.data == "buy_nodejs":
             selected_option_message = "chose 'Namaste Node.js' (₹29)"
+        elif query.data == "buy_dsa":
+            selected_option_message = "chose 'Namaste DSA' (₹49)"
+            amount_to_pay = "₹49"
         elif query.data == "buy_bundle":
-            selected_option_message = "chose 'All three bundle' (₹69)"
-            amount_to_pay = "₹69"
+            selected_option_message = "chose 'All four bundle' (₹99)"
+            amount_to_pay = "₹99"
 
         notify_admin_sync(user, f"User {selected_option_message}")
         context.user_data['selected_course_info'] = {'message': selected_option_message, 'amount': amount_to_pay}
@@ -191,7 +195,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if state == "ready_to_receive_payment":
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
                                      caption=f"🧾 Payment from {user.full_name or user.username}")
-        await context.bot.send_message(chat_id=user_id, text="✅ Payment received. Please follow the steps below to unlock the course. This is the last part of the course purchase. You can skip the sharing requirement by paying extra; there is an option for this below. After that, you need to share your contact details to receive course access.")
+        await context.bot.send_message(chat_id=user_id, text="✅ Payment received. Please follow the steps below to unlock the course.")
 
         # Show sharing instructions
         await context.bot.send_message(
@@ -204,16 +208,16 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_photo(
             chat_id=user_id,
             photo="https://i.postimg.cc/NfGX2Dfd/Web-Photo-Editor.jpg",
-            caption = (
-    "🚀 Akshay Saini's Dev Courses for just ₹29\n\n"
-    "📚 Includes:\n"
-    "   - React\n"
-    "   - Frontend System Design\n"
-    "   - Node.js\n\n"
-    "⚡ Access once, learn forever (with real projects)\n\n"
-    "👉 To get it: Search **ashbolt_bot** on Telegram"
-)
-
+            caption=(
+                "🚀 Akshay Saini's Dev Courses for just ₹29/₹49\n\n"
+                "📚 Includes:\n"
+                "   - React\n"
+                "   - Frontend System Design\n"
+                "   - Node.js\n"
+                "   - DSA\n\n"
+                "⚡ Access once, learn forever (with real projects)\n\n"
+                "👉 To get it: Search **ashbolt_bot** on Telegram"
+            )
         )
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("📤 Submit Screenshots", callback_data="submit_sharing_screenshots")],
@@ -227,13 +231,12 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if state == "ready_to_receive_payment_skip":
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_file_id,
                                      caption=f"🧾 Skip-sharing Payment ₹50 from {user.full_name or user.username}")
-        # Ask for phone consent
         consent_keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Yes, Share My Phone Number", callback_data="consent_share_phone")]
         ])
         await context.bot.send_message(
             chat_id=user_id,
-            text="✅ Payment received! To finalize your course access, please share your phone numberPayment done but no access? Ping @iam_akilesh07. Support in 24h.",
+            text="✅ Payment received! To finalize your course access, please share your phone number.",
             reply_markup=consent_keyboard
         )
         user_state[user_id] = "awaiting_phone_consent"
@@ -255,7 +258,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
             await context.bot.send_message(
                 chat_id=user_id,
-                text="✅ All 3 screenshots received! Please share your phone number to finalize course access.Payment done but no access? Ping @iam_akilesh07. Support in 24h.",
+                text="✅ All 3 screenshots received! Please share your phone number to finalize course access.",
                 reply_markup=consent_keyboard
             )
             user_state[user_id] = "awaiting_phone_consent"
