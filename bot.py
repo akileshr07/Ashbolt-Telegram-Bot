@@ -30,7 +30,10 @@ bot_app = Application.builder().token(BOT_TOKEN).build()
 
 # In-memory state
 user_state = {}  # chat_id -> state string
-user_screenshot_counter = {}  # chat_id -> int
+user_screenshot_counter = {}  # chat_id -> int (promo sharing screenshots)
+admin_summary_message_id = {}  # chat_id -> admin summary message id
+user_summary = {}  # chat_id -> dict with summary info
+user_total_screenshots = {}  # chat_id -> total screenshots sent to admin (payment + promo + skip-sharing)
 
 COURSE_LINKS = {
     "react": {
@@ -65,7 +68,7 @@ COURSE_LINKS = {
     }
 }
 
-# ----------------- Helper -----------------
+# ----------------- Helper: admin notification (if needed) -----------------
 def notify_admin_sync(user, message, photo=None):
     username = f"@{user.username}" if user.username else "N/A"
     admin_message = (
@@ -90,6 +93,7 @@ def notify_admin_sync(user, message, photo=None):
     except Exception:
         asyncio.create_task(send())
 
+# ----------------- Helper: course mapping -----------------
 def get_course_key_from_callback(callback_data: str) -> str | None:
     mapping = {
         "buy_react": "react",
@@ -100,7 +104,156 @@ def get_course_key_from_callback(callback_data: str) -> str | None:
     }
     return mapping.get(callback_data)
 
-def build_admin_summary_text(user, chat_id, course_key: str | None, extra_note: str = "") -> str:
+# ----------------- New Helpers: Admin Summary Panel -----------------
+def ensure_user_summary(chat_id: int, user=None):
+    data = user_summary.get(chat_id)
+    if data is None:
+        first_name = ""
+        last_name = ""
+        username = "N/A"
+        if user:
+            first_name = user.first_name or ""
+            last_name = user.last_name or ""
+            username = f"@{user.username}" if user.username else "N/A"
+        data = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "username": username,
+            "course_key": None,
+            "last_action": "User started the bot",
+            "stage": "start"  # "start" or "final"
+        }
+        user_summary[chat_id] = data
+    else:
+        if user:
+            if not data.get("first_name"):
+                data["first_name"] = user.first_name or ""
+            if data.get("last_name") is None:
+                data["last_name"] = user.last_name or ""
+            if data.get("username") in (None, "N/A") and user.username:
+                data["username"] = f"@{user.username}"
+    return data
+
+def build_admin_summary_text(chat_id: int) -> str:
+    data = user_summary.get(chat_id, {})
+    first_name = data.get("first_name", "")
+    last_name = data.get("last_name", "")
+    username = data.get("username", "N/A")
+    course_key = data.get("course_key")
+    last_action = data.get("last_action", "User started the bot")
+    total_screenshots = user_total_screenshots.get(chat_id, 0)
+
+    if course_key and course_key in COURSE_LINKS:
+        course_title = COURSE_LINKS[course_key]["title"]
+    elif course_key == "unknown":
+        course_title = "Unknown Course"
+    else:
+        course_title = "Not selected yet"
+
+    full_name = (first_name + " " + (last_name or "")).strip()
+
+    text = (
+        f"👤 Name: {full_name or 'N/A'}\n"
+        f"🆔 User ID: {chat_id}\n"
+        f"📧 Username: {username}\n"
+        f"📚 Course: {course_title}\n\n"
+        f"💬 User Action: {last_action}\n"
+        f"🖼 Total Screenshots: {total_screenshots}\n\n"
+        "Admin Options:"
+    )
+    return text
+
+def build_admin_summary_keyboard(chat_id: int) -> InlineKeyboardMarkup:
+    data = user_summary.get(chat_id, {})
+    stage = data.get("stage", "start")
+    course_key = data.get("course_key") or "unknown"
+
+    if stage == "start":
+        # Start-stage approval (flow control)
+        return InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "✅ Approved",
+                    callback_data=f"admin_start|approve|{chat_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "❌ Rejected",
+                    callback_data=f"admin_start|reject|{chat_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🤷 Ignored",
+                    callback_data=f"admin_start|ignore|{chat_id}"
+                )
+            ],
+        ])
+    else:
+        # Final course approval
+        return InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "✅ Approved",
+                    callback_data=f"admin|approve|{chat_id}|{course_key}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "❌ Rejected",
+                    callback_data=f"admin|reject|{chat_id}|{course_key}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🤷 Ignored",
+                    callback_data=f"admin|ignore|{chat_id}|{course_key}"
+                )
+            ],
+        ])
+
+async def update_admin_summary(chat_id: int, tg_user=None, course_key: str | None = None,
+                               last_action: str | None = None, stage: str | None = None):
+    data = ensure_user_summary(chat_id, tg_user)
+    if course_key is not None:
+        data["course_key"] = course_key
+    if last_action is not None:
+        data["last_action"] = last_action
+    if stage is not None:
+        data["stage"] = stage
+
+    text = build_admin_summary_text(chat_id)
+    keyboard = build_admin_summary_keyboard(chat_id)
+
+    msg_id = admin_summary_message_id.get(chat_id)
+    if msg_id is None:
+        msg = await bot_app.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=text,
+            reply_markup=keyboard
+        )
+        admin_summary_message_id[chat_id] = msg.message_id
+    else:
+        try:
+            await bot_app.bot.edit_message_text(
+                chat_id=ADMIN_ID,
+                message_id=msg_id,
+                text=text,
+                reply_markup=keyboard
+            )
+        except Exception as e:
+            logger.warning(f"Failed to edit admin summary message for {chat_id}: {e}")
+            # Try to send a new one if editing failed
+            msg = await bot_app.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=text,
+                reply_markup=keyboard
+            )
+            admin_summary_message_id[chat_id] = msg.message_id
+
+# ----------------- Legacy helper kept (not used anymore for text) -----------------
+def build_admin_summary_text_old(user, chat_id, course_key: str | None, extra_note: str = "") -> str:
     username = f"@{user.username}" if user.username else "N/A"
     if course_key and course_key in COURSE_LINKS:
         course_title = COURSE_LINKS[course_key]["title"]
@@ -159,46 +312,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-    # Notify admin that user has started the bot and show basic control panel
-    notify_admin_sync(user, "User started the bot")
+    # Initialize screenshot count
+    user_total_screenshots[chat_id] = user_total_screenshots.get(chat_id, 0)
 
-    username = f"@{user.username}" if user.username else "N/A"
-    admin_text = (
-        "🔎 New user started the bot\n\n"
-        f"🆔 ID: {chat_id}\n"
-        f"👤 Name: {user.first_name} {user.last_name or ''}\n"
-        f"📧 Username: {username}\n"
-        "Status: Just started, no course selected yet.\n\n"
-        "Admin options:"
+    # Create / update single admin summary panel (stage: start)
+    await update_admin_summary(
+        chat_id=chat_id,
+        tg_user=user,
+        last_action="User started the bot",
+        stage="start"
     )
-    admin_keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "✅ Allow Flow",
-                callback_data=f"admin_start|approve|{chat_id}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "❌ Reject Now",
-                callback_data=f"admin_start|reject|{chat_id}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "🤷 Ignore",
-                callback_data=f"admin_start|ignore|{chat_id}"
-            )
-        ],
-    ])
-    try:
-        await bot_app.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=admin_text,
-            reply_markup=admin_keyboard
-        )
-    except Exception as e:
-        logger.warning(f"Failed to send admin start panel: {e}")
 
 # ----------------- Button Handler -----------------
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -230,7 +353,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if action == "approve":
-            # Just inform the user that they can continue normally
             try:
                 await bot_app.bot.send_message(
                     chat_id=target_user_id,
@@ -239,9 +361,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "Please follow all payment and promo steps carefully to get course access."
                     )
                 )
-                await query.edit_message_text(
-                    f"✅ Allowed user {target_user_id} to continue the flow."
+                await update_admin_summary(
+                    chat_id=target_user_id,
+                    last_action="Admin Approved (Start Stage)"
                 )
+                await query.answer("User approved.", show_alert=False)
             except Exception as e:
                 logger.exception("Failed to notify user on approve (start): %s", e)
                 await query.answer("Failed to notify user.", show_alert=True)
@@ -256,9 +380,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             try:
                 await bot_app.bot.send_message(chat_id=target_user_id, text=msg)
-                await query.edit_message_text(
-                    f"❌ Rejected access for user {target_user_id} at start."
+                await update_admin_summary(
+                    chat_id=target_user_id,
+                    last_action="Admin Rejected (Start Stage)"
                 )
+                await query.answer("User rejected.", show_alert=False)
             except Exception as e:
                 logger.exception("Failed to send rejection (start) to user: %s", e)
                 await query.answer("Failed to notify user.", show_alert=True)
@@ -269,11 +395,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if action == "ignore":
             try:
-                await query.edit_message_text(
-                    f"🤷 Ignored user {target_user_id} at start. No action taken."
+                await update_admin_summary(
+                    chat_id=target_user_id,
+                    last_action="Admin Ignored (Start Stage)"
                 )
+                await query.answer("Ignored.", show_alert=False)
             except Exception as e:
-                logger.exception("Failed to edit admin start message: %s", e)
+                logger.exception("Failed to handle ignore (start): %s", e)
+                await query.answer("Failed to handle ignore.", show_alert=True)
             return
 
         await query.answer("Unknown admin action.", show_alert=True)
@@ -313,9 +442,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             try:
                 await bot_app.bot.send_message(chat_id=target_user_id, text=text)
-                await query.edit_message_text(
-                    f"✅ Approved and sent {details['title']} to user {target_user_id}."
+                await update_admin_summary(
+                    chat_id=target_user_id,
+                    last_action=f"Admin Approved Final Access ({details['title']})",
+                    stage="final"
                 )
+                await query.answer("Course access sent.", show_alert=False)
             except Exception as e:
                 logger.exception("Failed to send course to user: %s", e)
                 await query.answer("Failed to send course to user.", show_alert=True)
@@ -334,9 +466,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             try:
                 await bot_app.bot.send_message(chat_id=target_user_id, text=msg)
-                await query.edit_message_text(
-                    f"❌ Rejected course access for user {target_user_id}."
+                await update_admin_summary(
+                    chat_id=target_user_id,
+                    last_action="Admin Rejected Final Access",
+                    stage="final"
                 )
+                await query.answer("User rejected.", show_alert=False)
             except Exception as e:
                 logger.exception("Failed to send rejection to user: %s", e)
                 await query.answer("Failed to notify user.", show_alert=True)
@@ -352,9 +487,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             try:
                 await bot_app.bot.send_message(chat_id=target_user_id, text=msg)
-                await query.edit_message_text(
-                    f"🤷 Ignored; asked user {target_user_id} for proper payment receipt."
+                await update_admin_summary(
+                    chat_id=target_user_id,
+                    last_action="Admin Ignored (Ask for proper receipt)",
+                    stage="final"
                 )
+                await query.answer("Asked user for proper receipt.", show_alert=False)
             except Exception as e:
                 logger.exception("Failed to send ignore message to user: %s", e)
                 await query.answer("Failed to notify user.", show_alert=True)
@@ -385,14 +523,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             selected_option_message = "chose 'All four bundle' (₹99)"
             amount_to_pay = "₹99"
 
-        notify_admin_sync(user, f"User {selected_option_message}")
         context.user_data['selected_course_info'] = {
             'message': selected_option_message,
             'amount': amount_to_pay,
             'course_key': course_key
         }
 
+        # Update admin summary: course + action
         course_name = selected_option_message.split("chose '")[1].split("'")[0]
+        await update_admin_summary(
+            chat_id=chat_id,
+            tg_user=user,
+            course_key=course_key,
+            last_action=f"Selected course: {course_name}"
+        )
+
         await query.message.reply_text(
             f"🔥 You selected: {course_name}\n\n"
             f"💸 Pay {amount_to_pay} to:\n\n💰 *{UPI_ID}*",
@@ -421,6 +566,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat_id,
             text="📥 Please send your payment screenshot now."
         )
+        # Update admin summary
+        await update_admin_summary(
+            chat_id=chat_id,
+            tg_user=user,
+            last_action="User clicked 'Send Payment Receipt' button"
+        )
         return
 
     # ---------- Submit sharing screenshots ----------
@@ -431,6 +582,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         user_state[chat_id] = "collecting_screenshots"
         user_screenshot_counter[chat_id] = 0
+        await update_admin_summary(
+            chat_id=chat_id,
+            tg_user=user,
+            last_action="Prompted to upload 3 promo sharing screenshots"
+        )
         return
 
     # ---------- Don't want to share (₹50 extra) ----------
@@ -455,6 +611,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="📥 After payment, send your payment screenshot here."
         )
         user_state[chat_id] = "awaiting_skip_sharing_payment_screenshot"
+        await update_admin_summary(
+            chat_id=chat_id,
+            tg_user=user,
+            last_action="Chose to skip sharing (₹50 extra)"
+        )
         return
 
     # ---------- Fallback ----------
@@ -475,6 +636,12 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     username = f"@{user.username}" if user.username else "N/A"
 
+    # Ensure screenshot counter exists
+    user_total_screenshots[chat_id] = user_total_screenshots.get(chat_id, 0)
+    # every photo sent to admin increments total
+    def increment_total_screenshots():
+        user_total_screenshots[chat_id] = user_total_screenshots.get(chat_id, 0) + 1
+
     # If user skipped pressing "Submit Screenshots" button and directly sends screenshots
     if state == "awaiting_sharing_button_click":
         user_state[chat_id] = "collecting_screenshots"
@@ -494,6 +661,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption += f"📚 Course: {COURSE_LINKS[course_key]['title']}\n"
         caption += f"💸 Amount: {amount_to_pay}"
 
+        increment_total_screenshots()
         await bot_app.bot.send_photo(
             chat_id=ADMIN_ID,
             photo=photo_file_id,
@@ -551,6 +719,14 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboard
         )
         user_state[chat_id] = "awaiting_sharing_button_click"
+
+        # Update admin summary
+        await update_admin_summary(
+            chat_id=chat_id,
+            tg_user=user,
+            course_key=course_key,
+            last_action="Payment screenshot received, waiting for promo sharing / ₹50 extra"
+        )
         return
 
     # --- Skip-sharing payment screenshot (₹50 extra) ---
@@ -566,6 +742,7 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption += f"📚 Course: {COURSE_LINKS[course_key]['title']}\n"
         caption += "💸 Amount: ₹50 (skip sharing)"
 
+        increment_total_screenshots()
         await bot_app.bot.send_photo(
             chat_id=ADMIN_ID,
             photo=photo_file_id,
@@ -581,18 +758,13 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         )
 
-        # Send admin summary with approve / reject / ignore buttons
-        admin_text = build_admin_summary_text(
-            user,
-            chat_id,
-            course_key,
-            extra_note="Mode: Skip sharing (₹50 extra)"
-        )
-        admin_keyboard = build_admin_keyboard(chat_id, course_key)
-        await bot_app.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=admin_text,
-            reply_markup=admin_keyboard
+        # Update admin summary: move stage to final
+        await update_admin_summary(
+            chat_id=chat_id,
+            tg_user=user,
+            course_key=course_key,
+            last_action="Skip-sharing payment screenshot received (₹50 extra)",
+            stage="final"
         )
 
         user_state[chat_id] = "pending_admin_decision"
@@ -602,6 +774,8 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if state == "collecting_screenshots":
         count = user_screenshot_counter.get(chat_id, 0) + 1
         user_screenshot_counter[chat_id] = count
+
+        increment_total_screenshots()
         await bot_app.bot.send_message(
             chat_id=chat_id,
             text=f"✅ Screenshot {count} received!"
@@ -624,6 +798,14 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=share_caption
         )
 
+        # Update admin summary per screenshot
+        await update_admin_summary(
+            chat_id=chat_id,
+            tg_user=user,
+            course_key=course_key,
+            last_action=f"Promo sharing screenshot {count}/3 received"
+        )
+
         if count >= 3:
             await bot_app.bot.send_message(
                 chat_id=chat_id,
@@ -634,18 +816,13 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             )
 
-            admin_text = build_admin_summary_text(
-                user,
-                chat_id,
-                course_key,
-                extra_note="Mode: Promo sharing (3 screenshots verified)"
-            )
-            admin_keyboard = build_admin_keyboard(chat_id, course_key)
-
-            await bot_app.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=admin_text,
-                reply_markup=admin_keyboard
+            # Final admin summary update: stage final
+            await update_admin_summary(
+                chat_id=chat_id,
+                tg_user=user,
+                course_key=course_key,
+                last_action="All 3 promo sharing screenshots received",
+                stage="final"
             )
 
             user_state[chat_id] = "pending_admin_decision"
