@@ -146,20 +146,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             await context.bot.send_message(chat_id=target_id, text=msg, parse_mode="Markdown")
+            await query.message.reply_text(f"✅ Successfully sent access to user: {target_id}")
         except Exception as e:
             logger.exception("Failed to send course access to %s: %s", target_id, e)
-            try:
-                await query.edit_message_caption(caption=f"⚠️ Failed to send access to {target_id}")
-            except Exception:
-                await query.edit_message_text(text=f"⚠️ Failed to send access to {target_id}")
-            return
-
-        # Update admin panel message on success
-        try:
-            await query.edit_message_caption(caption=f"✅ Access sent to {target_id}")
-        except Exception:
-            await query.edit_message_text(text=f"✅ Access sent to {target_id}")
-
+            await query.message.reply_text(f"⚠️ Failed to send access to {target_id}\nError: {e}")
         return
 
     # ---------------------- ADMIN REJECT ----------------------
@@ -175,17 +165,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             await context.bot.send_message(chat_id=target_id, text=warn)
-            try:
-                await query.edit_message_caption(caption=f"❌ Rejected {target_id}")
-            except Exception:
-                await query.edit_message_text(text=f"❌ Rejected {target_id}")
+            await query.message.reply_text(f"❌ Rejected user: {target_id}")
         except Exception as e:
             logger.exception("Failed to reject user %s: %s", target_id, e)
-            try:
-                await query.edit_message_caption(caption="⚠️ Failed to reject user")
-            except Exception:
-                await query.edit_message_text(text="⚠️ Failed to reject user")
-
+            await query.message.reply_text(f"⚠️ Failed to reject user {target_id}\nError: {e}")
         return
 
     # ---------------------- SUBMIT SCREENSHOT ----------------------
