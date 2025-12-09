@@ -34,69 +34,49 @@ logger = logging.getLogger(__name__)
 fastapi_app = FastAPI()
 bot_app = Application.builder().token(BOT_TOKEN).build()
 
-# In-memory state
-user_state = {}  # chat_id -> state string
+# In-memory flow state
+user_state = {}  # user_id -> state string
 
 # ----------------- Course Config -----------------
 COURSE_LINKS = {
     "react": {
-        "warning": "🚨 STRICT WARNING — SINGLE-USER ACCESS ONLY 🚨\nThis link is for one user only.\nIf it is shared, forwarded, or accessed by multiple people, your access will be permanently revoked without notice.\nDO NOT forward, repost, or share this link under any circumstances.",
         "title": "React JS",
         "access_link": "https://1024terabox.com/s/1Y3oW9KXnDpgNDvAVgqS75w",
         "password": "7878",
+        "warning": "🚨 STRICT WARNING — SINGLE-USER ACCESS ONLY 🚨\nDo NOT forward/share this link. Violations = permanent ban.",
     },
     "dsa": {
-        "warning": "🚨 STRICT WARNING — SINGLE-USER ACCESS ONLY 🚨\nThis link is for one user only.\nIf it is shared, forwarded, or accessed by multiple people, your access will be permanently revoked without notice.\nDO NOT forward, repost, or share this link under any circumstances.",
         "title": "DSA",
         "access_link": "https://1024terabox.com/s/1bSAi4kTZNr_3vU8dw6beWA",
         "password": "7878",
+        "warning": "🚨 STRICT WARNING — SINGLE-USER ACCESS ONLY 🚨\nDo NOT forward/share this link. Violations = permanent ban.",
     },
     "all_four": {
-        "warning": "🚨 STRICT WARNING 🚨\nThis link is for single-user access only.\nIf this link is shared, forwarded, or accessed by multiple users, your access will be permanently revoked without notice.\nDO NOT forward, repost, or share this link under any circumstances.",
-        "title": "All Four Courses Link",
+        "title": "All Four Courses",
         "access_link": "https://1024terabox.com/s/1S0ilCkU2M2gvNAeaL_2aHw",
         "password": "7878",
+        "warning": "🚨 STRICT WARNING — SINGLE USER ONLY 🚨\nDo NOT share this bundle link. Violations = permanent ban.",
     },
     "nodejs": {
-        "warning": "🚨 STRICT WARNING — SINGLE-USER ACCESS ONLY 🚨\nThis link is for one user only.\nIf it is shared, forwarded, or accessed by multiple people, your access will be permanently revoked without notice.\nDO NOT forward, repost, or share this link under any circumstances.",
         "title": "Node JS",
         "access_link": "https://1024terabox.com/s/108ZGHCww19zCU7iux9tuxA",
         "password": "7878",
+        "warning": "🚨 STRICT WARNING — SINGLE USER ONLY 🚨",
     },
     "frontend_design": {
-        "warning": "🚨 STRICT WARNING — SINGLE-USER ACCESS ONLY 🚨\nThis link is for one user only.\nIf it is shared, forwarded, or accessed by multiple people, your access will be permanently revoked without notice.\nDO NOT forward, repost, or share this link under any circumstances.",
         "title": "Frontend Design",
         "access_link": "https://1024terabox.com/s/1NPgtKbO_bWzP1SpNJWa0Lw",
         "password": "7878",
+        "warning": "🚨 STRICT WARNING — SINGLE USER ONLY 🚨",
     },
 }
 
 COURSE_CONFIG = {
-    "buy_react": {
-        "label": "Namaste React",
-        "price": 39,
-        "link_key": "react",
-    },
-    "buy_nodejs": {
-        "label": "Namaste Node.js",
-        "price": 39,
-        "link_key": "nodejs",
-    },
-    "buy_dsa": {
-        "label": "Namaste DSA",
-        "price": 69,
-        "link_key": "dsa",
-    },
-    "buy_frontend_sd": {
-        "label": "Namaste Frontend System Design",
-        "price": 39,
-        "link_key": "frontend_design",
-    },
-    "buy_bundle": {
-        "label": "All four bundle",
-        "price": 149,
-        "link_key": "all_four",
-    },
+    "buy_react": {"label": "Namaste React", "price": 39, "link_key": "react"},
+    "buy_nodejs": {"label": "Namaste Node.js", "price": 39, "link_key": "nodejs"},
+    "buy_dsa": {"label": "Namaste DSA", "price": 69, "link_key": "dsa"},
+    "buy_frontend_sd": {"label": "Namaste Frontend System Design", "price": 39, "link_key": "frontend_design"},
+    "buy_bundle": {"label": "All four bundle", "price": 149, "link_key": "all_four"},
 }
 
 QR_IMAGE_URL = "https://i.postimg.cc/3N67GnpM/qr.jpg"
@@ -108,25 +88,19 @@ def notify_admin_sync(message: str):
         try:
             if ADMIN_ID:
                 await bot_app.bot.send_message(chat_id=ADMIN_ID, text=message)
-        except Exception as e:
-            logger.exception("Failed to notify admin: %s", e)
+        except:
+            pass
 
     try:
         bot_app.create_task(send())
-    except Exception:
+    except:
         asyncio.create_task(send())
-
-
-def get_course_from_link_key(link_key: str):
-    for key, cfg in COURSE_CONFIG.items():
-        if cfg["link_key"] == link_key:
-            return cfg
-    return None
 
 
 # ----------------- Handlers -----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
+    user_id = user.id
 
     keyboard = [
         [InlineKeyboardButton("1. Namaste DSA ₹69", callback_data="buy_dsa")],
@@ -136,18 +110,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("5. All four bundle ₹149", callback_data="buy_bundle")],
     ]
 
-    text = (
-        f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\n"
-        "Please choose a course option below and follow the payment instructions carefully."
-    )
-
     await update.message.reply_text(
-        text,
+        f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\nSelect a course below:",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
-    chat_id = update.message.chat_id
-    user_state.pop(chat_id, None)
+    user_state.pop(user_id, None)
     context.user_data.clear()
 
 
@@ -156,298 +124,169 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     user = query.from_user
-    chat_id = query.message.chat_id
+    user_id = user.id
     data = query.data
 
-    # Admin actions: approve or reject payment
-    if user.id == ADMIN_ID and data.startswith("admin_approve:"):
-        _, user_id_str, course_key = data.split(":")
-        target_user_id = int(user_id_str)
+    # ---------------------- ADMIN APPROVE ----------------------
+    if user_id == ADMIN_ID and data.startswith("admin_approve:"):
+        _, target_id, course_key = data.split(":")
+        target_id = int(target_id)
 
-        course_link_info = COURSE_LINKS.get(course_key)
-        course_cfg = get_course_from_link_key(course_key)
+        info = COURSE_LINKS[course_key]
+        price = next(v["price"] for v in COURSE_CONFIG.values() if v["link_key"] == course_key)
 
-        if not course_link_info or not course_cfg:
-            await query.edit_message_caption(
-                caption="⚠️ Error: Course configuration not found. Please check the bot setup."
-            )
-            return
-
-        price = course_cfg["price"]
-
-        message_text = (
+        msg = (
             "🎉 *Your Course Access is Ready!*\n\n"
-            f"📚 *Course:* {course_link_info['title']}\n"
-            f"💰 *Price:* ₹{price}\n\n"
-            f"🔗 *Access Link:*\n{course_link_info['access_link']}\n\n"
-            f"🔐 *Password:*\n{course_link_info['password']}\n\n"
-            f"{course_link_info['warning']}"
+            f"📚 Course: *{info['title']}*\n"
+            f"💰 Price: ₹{price}\n\n"
+            f"🔗 Access Link:\n{info['access_link']}\n\n"
+            f"🔐 Password:\n{info['password']}\n\n"
+            f"{info['warning']}"
         )
 
         try:
-            await context.bot.send_message(
-                chat_id=target_user_id,
-                text=message_text,
-                parse_mode="Markdown",
-            )
-            await query.edit_message_caption(
-                caption=f"✅ Approved and course access sent to user {target_user_id}."
-            )
-        except Exception as e:
-            logger.exception("Failed to send course access to user: %s", e)
-            await query.edit_message_caption(
-                caption=f"⚠️ Failed to send course access to user {target_user_id}. Check logs."
-            )
-
-        user_state.pop(target_user_id, None)
+            await context.bot.send_message(chat_id=target_id, text=msg, parse_mode="Markdown")
+            await query.edit_message_caption(caption=f"✅ Access sent to {target_id}")
+        except:
+            await query.edit_message_caption(caption=f"⚠️ Failed to send access to {target_id}")
         return
 
-    if user.id == ADMIN_ID and data.startswith("admin_reject:"):
-        _, user_id_str, course_key = data.split(":")
-        target_user_id = int(user_id_str)
+    # ---------------------- ADMIN REJECT ----------------------
+    if user_id == ADMIN_ID and data.startswith("admin_reject:"):
+        _, target_id, course_key = data.split(":")
+        target_id = int(target_id)
 
-        warning_text = (
-            "⚠️ Your payment could not be verified or was rejected.\n\n"
-            "Please click /start and follow the purchase flow carefully.\n\n"
-            "If you have any doubts, contact the admin:\n"
-            "@iam_akilesh07"
+        warn = (
+            "⚠️ Your payment could not be verified.\n\n"
+            "Please restart using /start.\n"
+            "For help: @iam_akilesh07"
         )
 
         try:
-            await context.bot.send_message(
-                chat_id=target_user_id,
-                text=warning_text,
-            )
-            await query.edit_message_caption(
-                caption=f"❌ Payment request from user {target_user_id} was rejected. Warning sent."
-            )
-        except Exception as e:
-            logger.exception("Failed to send rejection warning to user: %s", e)
-            await query.edit_message_caption(
-                caption=f"⚠️ Failed to notify user {target_user_id}. Check logs."
-            )
-
-        user_state.pop(target_user_id, None)
+            await context.bot.send_message(chat_id=target_id, text=warn)
+            await query.edit_message_caption(caption=f"❌ Rejected {target_id}")
+        except:
+            await query.edit_message_caption(caption=f"⚠️ Failed to reject user")
         return
 
-    # User action: submit screenshot button
+    # ---------------------- SUBMIT SCREENSHOT ----------------------
     if data == "submit_screenshot":
-        course_key = context.user_data.get("course_key")
-        price = context.user_data.get("price")
-        course_label = context.user_data.get("course_label")
+        label = context.user_data["course_label"]
+        price = context.user_data["price"]
 
-        if not course_key or price is None or not course_label:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="⚠️ Course details missing. Please use /start and select a course again.",
-            )
-            return
-
-        user_state[chat_id] = "awaiting_payment_screenshot"
+        user_state[user_id] = "awaiting_payment_screenshot"
 
         await context.bot.send_message(
-            chat_id=chat_id,
+            chat_id=user_id,
             text=(
-                "📸 Now send your payment screenshot as a photo.\n\n"
-                "Use this caption format:\n"
-                "Name: <your full name>\n"
-                f"Course: {course_label}\n"
+                "📸 Send your payment screenshot now.\n\n"
+                "**USE THIS EXACT CAPTION:**\n\n"
+                "Name:\n"
+                f"Course: {label}\n"
                 f"Amount Paid: ₹{price}"
             ),
+            parse_mode="Markdown"
         )
-
-        notify_admin_sync(
-            f"User {user.id} pressed 'Submit Screenshot' for {course_label} (₹{price})."
-        )
-
         return
 
-    # User actions: course selection
+    # ---------------------- COURSE SELECTION ----------------------
     if data in COURSE_CONFIG:
         cfg = COURSE_CONFIG[data]
-        label = cfg["label"]
-        price = cfg["price"]
-        link_key = cfg["link_key"]
 
-        context.user_data["course_key"] = link_key
-        context.user_data["price"] = price
-        context.user_data["course_label"] = label
+        context.user_data["course_key"] = cfg["link_key"]
+        context.user_data["course_label"] = cfg["label"]
+        context.user_data["price"] = cfg["price"]
 
-        user_state[chat_id] = "course_selected"
-
-        message_text = (
-            f"🔥 You selected: {label} (₹{price})\n\n"
-            "💸 Pay the amount to the UPI ID below and then send your payment screenshot.\n\n"
-            f"💰 UPI ID: {UPI_ID}"
-        )
-
-        await query.message.reply_text(
-            message_text,
-        )
-
-        await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=QR_IMAGE_URL,
-            caption=f"📷 Scan this QR to pay ₹{price}",
-        )
-
-        submit_keyboard = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "📤 Submit Screenshot", callback_data="submit_screenshot"
-                    )
-                ]
-            ]
-        )
+        user_state[user_id] = "course_selected"
 
         await context.bot.send_message(
-            chat_id=chat_id,
-            text="✅ After completing the payment, click the button below to submit your payment receipt.",
-            reply_markup=submit_keyboard,
-        )
-
-        notify_admin_sync(f"User {user.id} chose '{label}' (₹{price}).")
-        return
-
-    # Fallback
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text="❌ Unknown action. Use /start to restart.",
-    )
-
-
-async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
-    user = update.message.from_user
-    state = user_state.get(chat_id)
-
-    if state != "awaiting_payment_screenshot":
-        await update.message.reply_text(
-            "🤔 Unexpected photo. Use /start to follow the proper purchase flow."
-        )
-        return
-
-    photo_file_id = update.message.photo[-1].file_id
-    caption_text = update.message.caption or "No caption provided."
-
-    course_key = context.user_data.get("course_key")
-    price = context.user_data.get("price")
-    course_label = context.user_data.get("course_label")
-
-    if not course_key or price is None or not course_label:
-        await update.message.reply_text(
-            "⚠️ Internal error: course details missing. Please use /start again."
-        )
-        return
-
-    username_display = f"@{user.username}" if user.username else "N/A"
-
-    admin_caption = (
-        f"🧾 *New Payment Request*\n\n"
-        f"👤 User Action: User chose '{course_label}' (₹{price})\n"
-        f"🆔 ID: `{chat_id}`\n"
-        f"👤 Name: {user.first_name or ''} {user.last_name or ''}\n"
-        f"📧 Username: {username_display}\n\n"
-        f"💬 User Caption:\n{caption_text}\n\n"
-        "Please review the screenshot and choose an action below."
-    )
-
-    approve_cb = f"admin_approve:{chat_id}:{course_key}"
-    reject_cb = f"admin_reject:{chat_id}:{course_key}"
-
-    reply_markup = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "✅ Approve & Send Access", callback_data=approve_cb
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "❌ Reject Payment", callback_data=reject_cb
-                )
-            ],
-        ]
-    )
-
-    try:
-        await context.bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=photo_file_id,
-            caption=admin_caption,
+            chat_id=user_id,
+            text=(
+                f"🔥 You selected: {cfg['label']} (₹{cfg['price']})\n\n"
+                f"💸 Pay to UPI ID:\n`{UPI_ID}`"
+            ),
             parse_mode="Markdown",
-            reply_markup=reply_markup,
         )
-    except Exception as e:
-        logger.exception("Failed to send payment screenshot to admin: %s", e)
-        await update.message.reply_text(
-            "⚠️ Failed to send your receipt to admin. Please try again or contact support."
+
+        await context.bot.send_photo(
+            chat_id=user_id,
+            photo=QR_IMAGE_URL,
+            caption=f"📷 Scan to Pay ₹{cfg['price']}",
         )
-        return
 
-    await update.message.reply_text(
-        "✅ Your payment receipt has been sent to the admin for verification.\n"
-        "You will receive your course access link after approval."
-    )
-
-    user_state[chat_id] = "payment_under_review"
-
-
-async def send_course_link_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Unauthorized")
-        return
-
-    try:
-        user_id = int(context.args[0])
-        course_key = context.args[1]
-
-        course_link_info = COURSE_LINKS.get(course_key)
-        course_cfg = get_course_from_link_key(course_key)
-
-        if not course_link_info or not course_cfg:
-            await update.message.reply_text("⚠️ Error: Course configuration not found.")
-            return
-
-        price = course_cfg["price"]
-
-        message_text = (
-            "🎉 *Your Course Access is Ready!*\n\n"
-            f"📚 *Course:* {course_link_info['title']}\n"
-            f"💰 *Price:* ₹{price}\n\n"
-            f"🔗 *Access Link:*\n{course_link_info['access_link']}\n\n"
-            f"🔐 *Password:*\n{course_link_info['password']}\n\n"
-            f"{course_link_info['warning']}"
+        btn = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("📤 Submit Screenshot", callback_data="submit_screenshot")]]
         )
 
         await context.bot.send_message(
             chat_id=user_id,
-            text=message_text,
-            parse_mode="Markdown",
+            text="After payment, click below:",
+            reply_markup=btn,
         )
-        await update.message.reply_text("✅ Sent course access manually.")
-        user_state.pop(user_id, None)
-    except Exception as e:
-        logger.exception("Failed to send course link manually: %s", e)
-        await update.message.reply_text(
-            "❌ Usage: /send_link <user_id> <course_key>"
-        )
+        return
+
+    await context.bot.send_message(chat_id=user_id, text="❌ Unknown option. Use /start")
 
 
+async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    user_id = user.id
+    state = user_state.get(user_id)
+
+    if state != "awaiting_payment_screenshot":
+        await update.message.reply_text("❌ Unexpected photo. Use /start.")
+        return
+
+    photo_id = update.message.photo[-1].file_id
+    caption = update.message.caption or "No caption"
+
+    course_key = context.user_data["course_key"]
+    price = context.user_data["price"]
+    label = context.user_data["course_label"]
+    username = f"@{user.username}" if user.username else "N/A"
+
+    admin_caption = (
+        f"🧾 *New Payment Request*\n\n"
+        f"👤 Name: {user.first_name} {user.last_name or ''}\n"
+        f"🆔 ID: `{user_id}`\n"
+        f"📧 Username: {username}\n\n"
+        f"📚 Course: *{label}*\n"
+        f"💰 Amount: ₹{price}\n\n"
+        f"💬 User Caption:\n{caption}"
+    )
+
+    approve = f"admin_approve:{user_id}:{course_key}"
+    reject = f"admin_reject:{user_id}:{course_key}"
+
+    btns = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("✅ Approve", callback_data=approve)],
+            [InlineKeyboardButton("❌ Reject", callback_data=reject)],
+        ]
+    )
+
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=photo_id,
+        caption=admin_caption,
+        parse_mode="Markdown",
+        reply_markup=btns,
+    )
+
+    await update.message.reply_text("✅ Screenshot sent to admin. You’ll get access soon.")
+    user_state[user_id] = "payment_under_review"
+
+
+# ----------------- Unknown Commands -----------------
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ Unknown command. Use /start to restart.")
+    await update.message.reply_text("Unknown command. Use /start")
 
 
 # ----------------- Handlers -----------------
 bot_app.add_handler(CommandHandler("start", start))
-bot_app.add_handler(CommandHandler("send_link", send_course_link_manual))
 bot_app.add_handler(CallbackQueryHandler(button_handler))
 bot_app.add_handler(MessageHandler(filters.PHOTO, handle_photos))
 bot_app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
-bot_app.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_command)
-)
 
 
 # ----------------- Webhook -----------------
@@ -456,8 +295,7 @@ async def telegram_webhook(request: Request):
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != WEBHOOK_SECRET_TOKEN:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    body = await request.json()
-    update = Update.de_json(body, bot_app.bot)
+    update = Update.de_json(await request.json(), bot_app.bot)
     await bot_app.process_update(update)
     return {"ok": True}
 
@@ -465,13 +303,12 @@ async def telegram_webhook(request: Request):
 # ----------------- Startup / Shutdown -----------------
 @fastapi_app.on_event("startup")
 async def on_startup():
-    logger.info("Initializing Telegram bot...")
     await bot_app.initialize()
     await bot_app.start()
     if WEBHOOK_URL and WEBHOOK_SECRET_TOKEN:
-        webhook_url_full = f"{WEBHOOK_URL}/{WEBHOOK_SECRET_TOKEN}"
         await bot_app.bot.set_webhook(
-            url=webhook_url_full, secret_token=WEBHOOK_SECRET_TOKEN
+            url=f"{WEBHOOK_URL}/{WEBHOOK_SECRET_TOKEN}",
+            secret_token=WEBHOOK_SECRET_TOKEN,
         )
 
 
