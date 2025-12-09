@@ -15,6 +15,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+from telegram.helpers import escape_markdown
 
 # ----------------- Config -----------------
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -34,8 +35,8 @@ logger = logging.getLogger(__name__)
 fastapi_app = FastAPI()
 bot_app = Application.builder().token(BOT_TOKEN).build()
 
-# In-memory flow state
-user_state = {}  # user_id -> state string
+# In-memory state
+user_state = {}  # user_id -> state
 
 # ----------------- Course Config -----------------
 COURSE_LINKS = {
@@ -43,19 +44,19 @@ COURSE_LINKS = {
         "title": "React JS",
         "access_link": "https://1024terabox.com/s/1Y3oW9KXnDpgNDvAVgqS75w",
         "password": "7878",
-        "warning": "🚨 STRICT WARNING — SINGLE-USER ACCESS ONLY 🚨\nDo NOT forward/share this link. Violations = permanent ban.",
+        "warning": "🚨 STRICT WARNING — SINGLE USER ONLY 🚨\nDo NOT forward/share this link.",
     },
     "dsa": {
         "title": "DSA",
         "access_link": "https://1024terabox.com/s/1bSAi4kTZNr_3vU8dw6beWA",
         "password": "7878",
-        "warning": "🚨 STRICT WARNING — SINGLE-USER ACCESS ONLY 🚨\nDo NOT forward/share this link. Violations = permanent ban.",
+        "warning": "🚨 STRICT WARNING — SINGLE USER ONLY 🚨\nDo NOT forward/share this link.",
     },
     "all_four": {
         "title": "All Four Courses",
         "access_link": "https://1024terabox.com/s/1S0ilCkU2M2gvNAeaL_2aHw",
         "password": "7878",
-        "warning": "🚨 STRICT WARNING — SINGLE USER ONLY 🚨\nDo NOT share this bundle link. Violations = permanent ban.",
+        "warning": "🚨 STRICT WARNING — SINGLE USER ONLY 🚨",
     },
     "nodejs": {
         "title": "Node JS",
@@ -82,22 +83,7 @@ COURSE_CONFIG = {
 QR_IMAGE_URL = "https://i.postimg.cc/3N67GnpM/qr.jpg"
 
 
-# ----------------- Helper -----------------
-def notify_admin_sync(message: str):
-    async def send():
-        try:
-            if ADMIN_ID:
-                await bot_app.bot.send_message(chat_id=ADMIN_ID, text=message)
-        except Exception as e:
-            logger.exception("Failed to notify admin: %s", e)
-
-    try:
-        bot_app.create_task(send())
-    except Exception:
-        asyncio.create_task(send())
-
-
-# ----------------- Handlers -----------------
+# ----------------- Start -----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     user_id = user.id
@@ -106,26 +92,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("1. Namaste DSA ₹69", callback_data="buy_dsa")],
         [InlineKeyboardButton("2. Namaste React ₹39", callback_data="buy_react")],
         [InlineKeyboardButton("3. Namaste Node.js ₹39", callback_data="buy_nodejs")],
-        [InlineKeyboardButton("4. Namaste Frontend System Design ₹39", callback_data="buy_frontend_sd")],
+        [InlineKeyboardButton("4. Namaste Frontend SD ₹39", callback_data="buy_frontend_sd")],
         [InlineKeyboardButton("5. All four bundle ₹149", callback_data="buy_bundle")],
     ]
 
     await update.message.reply_text(
-        f"👋 Welcome to AshBolt Bot, {user.first_name}!\n\nSelect a course below:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        f"👋 Welcome to AshBolt Bot, {escape_markdown(user.first_name, 2)}!\n\nSelect a course below:",
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
     user_state.pop(user_id, None)
     context.user_data.clear()
 
 
+# ----------------- Button Handler -----------------
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
-
+    data = query.data
     user = query.from_user
     user_id = user.id
-    data = query.data
+
+    await query.answer()
 
     # ---------------------- ADMIN APPROVE ----------------------
     if user_id == ADMIN_ID and data.startswith("admin_approve:"):
@@ -136,20 +124,32 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         price = next(v["price"] for v in COURSE_CONFIG.values() if v["link_key"] == course_key)
 
         msg = (
-            "🎉 *Your Course Access is Ready!*\n\n"
-            f"📚 Course: *{info['title']}*\n"
-            f"💰 Price: ₹{price}\n\n"
-            f"🔗 Access Link:\n{info['access_link']}\n\n"
-            f"🔐 Password:\n{info['password']}\n\n"
-            f"{info['warning']}"
+            "🎉 *Your Course Access is Ready\!*\\n\\n"
+            f"📚 *{escape_markdown(info['title'],2)}*\\n"
+            f"💰 Price: ₹{price}\\n\\n"
+            f"🔗 Link:\\n{escape_markdown(info['access_link'],2)}\\n\\n"
+            f"🔐 Password:\\n{escape_markdown(info['password'],2)}\\n\\n"
+            f"{escape_markdown(info['warning'],2)}"
         )
 
         try:
-            await context.bot.send_message(chat_id=target_id, text=msg, parse_mode="Markdown")
-            await query.message.reply_text(f"✅ Successfully sent access to user: {target_id}")
+            await context.bot.send_message(
+                chat_id=target_id,
+                text=msg,
+                parse_mode="MarkdownV2"
+            )
+
+            await query.message.reply_text(
+                f"✅ Access sent to user `{target_id}`",
+                parse_mode="MarkdownV2"
+            )
+
         except Exception as e:
-            logger.exception("Failed to send course access to %s: %s", target_id, e)
-            await query.message.reply_text(f"⚠️ Failed to send access to {target_id}\nError: {e}")
+            await query.message.reply_text(
+                f"⚠️ Failed to send access to `{target_id}`\\nError: `{escape_markdown(str(e),2)}`",
+                parse_mode="MarkdownV2"
+            )
+
         return
 
     # ---------------------- ADMIN REJECT ----------------------
@@ -157,18 +157,26 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _, target_id, course_key = data.split(":")
         target_id = int(target_id)
 
-        warn = (
-            "⚠️ Your payment could not be verified.\n\n"
-            "Please restart using /start.\n"
-            "For help: @iam_akilesh07"
-        )
+        warn = "⚠️ Payment could not be verified\\. Please restart using /start"
 
         try:
-            await context.bot.send_message(chat_id=target_id, text=warn)
-            await query.message.reply_text(f"❌ Rejected user: {target_id}")
+            await context.bot.send_message(
+                chat_id=target_id,
+                text=warn,
+                parse_mode="MarkdownV2"
+            )
+
+            await query.message.reply_text(
+                f"❌ Rejected user `{target_id}`",
+                parse_mode="MarkdownV2"
+            )
+
         except Exception as e:
-            logger.exception("Failed to reject user %s: %s", target_id, e)
-            await query.message.reply_text(f"⚠️ Failed to reject user {target_id}\nError: {e}")
+            await query.message.reply_text(
+                f"⚠️ Failed to reject `{target_id}`\\nError: `{escape_markdown(str(e),2)}`",
+                parse_mode="MarkdownV2"
+            )
+
         return
 
     # ---------------------- SUBMIT SCREENSHOT ----------------------
@@ -177,7 +185,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await context.bot.send_message(
             chat_id=user_id,
-            text="📸 Send your payment screenshot now."
+            text="📸 Send your payment screenshot now\\.",
+            parse_mode="MarkdownV2"
         )
         return
 
@@ -194,16 +203,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=user_id,
             text=(
-                f"🔥 You selected: {cfg['label']} (₹{cfg['price']})\n\n"
-                f"💸 Pay to UPI ID:\n`{UPI_ID}`"
+                f"🔥 *You selected:* {escape_markdown(cfg['label'],2)} \\(₹{cfg['price']}\\)\\n\\n"
+                f"💸 *Pay to UPI:* `{escape_markdown(UPI_ID,2)}`"
             ),
-            parse_mode="Markdown",
+            parse_mode="MarkdownV2"
         )
 
         await context.bot.send_photo(
             chat_id=user_id,
             photo=QR_IMAGE_URL,
-            caption=f"📷 Scan to Pay ₹{cfg['price']}",
+            caption=f"📷 Scan to pay ₹{cfg['price']}",
         )
 
         btn = InlineKeyboardMarkup(
@@ -217,34 +226,38 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    await context.bot.send_message(chat_id=user_id, text="❌ Unknown option. Use /start")
+    await context.bot.send_message(
+        chat_id=user_id,
+        text="❌ Unknown option\\. Use /start",
+        parse_mode="MarkdownV2"
+    )
 
 
+# ----------------- Handle Screenshot -----------------
 async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     user_id = user.id
-    state = user_state.get(user_id)
 
-    if state != "awaiting_payment_screenshot":
-        await update.message.reply_text("❌ Unexpected photo. Use /start.")
+    if user_state.get(user_id) != "awaiting_payment_screenshot":
+        await update.message.reply_text("❌ Unexpected photo\\. Use /start", parse_mode="MarkdownV2")
         return
 
     photo_id = update.message.photo[-1].file_id
-    caption = update.message.caption or "No caption"
+    caption = escape_markdown(update.message.caption or "No caption", 2)
 
     course_key = context.user_data.get("course_key")
     price = context.user_data.get("price")
-    label = context.user_data.get("course_label")
-    username = f"@{user.username}" if user.username else "N/A"
+    label = escape_markdown(context.user_data.get("course_label"), 2)
+    username = escape_markdown(f"@{user.username}" if user.username else "N/A", 2)
 
     admin_caption = (
-        f"🧾 *New Payment Request*\n\n"
-        f"👤 Name: {user.first_name} {user.last_name or ''}\n"
-        f"🆔 ID: `{user_id}`\n"
-        f"📧 Username: {username}\n\n"
-        f"📚 Course: *{label}*\n"
-        f"💰 Amount: ₹{price}\n\n"
-        f"💬 User Caption:\n{caption}"
+        "🧾 *New Payment Request*\\n\\n"
+        f"👤 *Name:* {escape_markdown(user.first_name,2)}\\n"
+        f"🆔 *ID:* `{user_id}`\\n"
+        f"📧 *Username:* {username}\\n\\n"
+        f"📚 *Course:* {label}\\n"
+        f"💰 *Amount:* ₹{price}\\n\\n"
+        f"💬 *Caption:*\\n{caption}"
     )
 
     approve = f"admin_approve:{user_id}:{course_key}"
@@ -261,17 +274,21 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=ADMIN_ID,
         photo=photo_id,
         caption=admin_caption,
-        parse_mode="Markdown",
+        parse_mode="MarkdownV2",
         reply_markup=btns,
     )
 
-    await update.message.reply_text("✅ Screenshot sent to admin. You’ll get access soon.")
+    await update.message.reply_text(
+        "✅ Screenshot sent to admin\\. You’ll get access soon\\.",
+        parse_mode="MarkdownV2"
+    )
+
     user_state[user_id] = "payment_under_review"
 
 
 # ----------------- Unknown Commands -----------------
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Unknown command. Use /start")
+    await update.message.reply_text("Unknown command\\. Use /start", parse_mode="MarkdownV2")
 
 
 # ----------------- Handlers -----------------
@@ -297,7 +314,7 @@ async def telegram_webhook(request: Request):
 async def on_startup():
     await bot_app.initialize()
     await bot_app.start()
-    if WEBHOOK_URL and WEBHOOK_SECRET_TOKEN:
+    if WEBHOOK_URL:
         await bot_app.bot.set_webhook(
             url=f"{WEBHOOK_URL}/{WEBHOOK_SECRET_TOKEN}",
             secret_token=WEBHOOK_SECRET_TOKEN,
