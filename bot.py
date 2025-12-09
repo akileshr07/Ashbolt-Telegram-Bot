@@ -88,12 +88,12 @@ def notify_admin_sync(message: str):
         try:
             if ADMIN_ID:
                 await bot_app.bot.send_message(chat_id=ADMIN_ID, text=message)
-        except:
-            pass
+        except Exception as e:
+            logger.exception("Failed to notify admin: %s", e)
 
     try:
         bot_app.create_task(send())
-    except:
+    except Exception:
         asyncio.create_task(send())
 
 
@@ -146,9 +146,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             await context.bot.send_message(chat_id=target_id, text=msg, parse_mode="Markdown")
+        except Exception as e:
+            logger.exception("Failed to send course access to %s: %s", target_id, e)
+            try:
+                await query.edit_message_caption(caption=f"⚠️ Failed to send access to {target_id}")
+            except Exception:
+                await query.edit_message_text(text=f"⚠️ Failed to send access to {target_id}")
+            return
+
+        # Update admin panel message on success
+        try:
             await query.edit_message_caption(caption=f"✅ Access sent to {target_id}")
-        except:
-            await query.edit_message_caption(caption=f"⚠️ Failed to send access to {target_id}")
+        except Exception:
+            await query.edit_message_text(text=f"✅ Access sent to {target_id}")
+
         return
 
     # ---------------------- ADMIN REJECT ----------------------
@@ -164,28 +175,26 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             await context.bot.send_message(chat_id=target_id, text=warn)
-            await query.edit_message_caption(caption=f"❌ Rejected {target_id}")
-        except:
-            await query.edit_message_caption(caption=f"⚠️ Failed to reject user")
+            try:
+                await query.edit_message_caption(caption=f"❌ Rejected {target_id}")
+            except Exception:
+                await query.edit_message_text(text=f"❌ Rejected {target_id}")
+        except Exception as e:
+            logger.exception("Failed to reject user %s: %s", target_id, e)
+            try:
+                await query.edit_message_caption(caption="⚠️ Failed to reject user")
+            except Exception:
+                await query.edit_message_text(text="⚠️ Failed to reject user")
+
         return
 
     # ---------------------- SUBMIT SCREENSHOT ----------------------
     if data == "submit_screenshot":
-        label = context.user_data["course_label"]
-        price = context.user_data["price"]
-
         user_state[user_id] = "awaiting_payment_screenshot"
 
         await context.bot.send_message(
             chat_id=user_id,
-            text=(
-                "📸 Send your payment screenshot now.\n\n"
-                "**USE THIS EXACT CAPTION:**\n\n"
-                "Name:\n"
-                f"Course: {label}\n"
-                f"Amount Paid: ₹{price}"
-            ),
-            parse_mode="Markdown"
+            text="📸 Send your payment screenshot now."
         )
         return
 
@@ -240,9 +249,9 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo_id = update.message.photo[-1].file_id
     caption = update.message.caption or "No caption"
 
-    course_key = context.user_data["course_key"]
-    price = context.user_data["price"]
-    label = context.user_data["course_label"]
+    course_key = context.user_data.get("course_key")
+    price = context.user_data.get("price")
+    label = context.user_data.get("course_label")
     username = f"@{user.username}" if user.username else "N/A"
 
     admin_caption = (
