@@ -144,25 +144,35 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _, target_id_str, course_key = data.split(":", 2)
         target_id = int(target_id_str)
 
-        info = COURSE_LINKS[course_key]
-        price = next(v["price"] for v in COURSE_CONFIG.values() if v["link_key"] == course_key)
+        info = COURSE_LINKS.get(course_key)
+        if not info:
+            await query.message.reply_text(
+                f"⚠️ Invalid course key in callback: {course_key}"
+            )
+            return
 
-        # UPDATED CLEAN PROFESSIONAL FORMAT
+        price = next(
+            v["price"] for v in COURSE_CONFIG.values() if v["link_key"] == course_key
+        )
+
+        # Use HTML here to avoid fragile MarkdownV2 errors
         msg = (
-            "🚨 *ACCESS ONLY* 🚨\n"
-            "This link is for *one user only*.\n"
+            "🚨 <b>ACCESS ONLY</b> 🚨\n"
+            "This link is for <b>one user only</b>.\n"
             "If it is shared, forwarded, or accessed by multiple people, your access will be permanently revoked without notice.\n"
             "DO NOT forward, repost, or share this link under any circumstances.\n\n"
-            f"📌 *Title:* {md(info['title'])}\n"
-            f"🔗 *Access Link:* {md(info['access_link'])}\n"
-            f"🔐 *Password:* {md(info['password'])}\n\n"
-            "— Confidential material\\. Sharing = *immediate termination* of access\\."
+            f"📌 <b>Title:</b> {info['title']}\n"
+            f"💰 <b>Paid Amount:</b> ₹{price}\n"
+            f"🔗 <b>Access Link:</b> {info['access_link']}\n"
+            f"🔐 <b>Password:</b> {info['password']}\n\n"
+            "— Confidential material. Sharing = <b>immediate termination</b> of access."
         )
 
         await context.bot.send_message(
             chat_id=target_id,
             text=msg,
-            parse_mode="MarkdownV2",
+            parse_mode="HTML",
+            disable_web_page_preview=True,
         )
 
         await query.message.reply_text(
