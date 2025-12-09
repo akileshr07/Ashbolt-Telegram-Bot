@@ -55,26 +55,31 @@ COURSE_LINKS = {
         "title": "React JS",
         "access_link": "https://1024terabox.com/s/1Y3oW9KXnDpgNDvAVgqS75w",
         "password": "7878",
+        "warning": md("🚨 STRICT WARNING — SINGLE USER ONLY 🚨\nDo NOT forward/share this link."),
     },
     "dsa": {
         "title": "DSA",
         "access_link": "https://1024terabox.com/s/1bSAi4kTZNr_3vU8dw6beWA",
         "password": "7878",
+        "warning": md("🚨 STRICT WARNING — SINGLE USER ONLY 🚨\nDo NOT forward/share this link."),
     },
     "all_four": {
         "title": "All Four Courses",
         "access_link": "https://1024terabox.com/s/1S0ilCkU2M2gvNAeaL_2aHw",
         "password": "7878",
+        "warning": md("🚨 STRICT WARNING — SINGLE USER ONLY 🚨"),
     },
     "nodejs": {
         "title": "Node JS",
         "access_link": "https://1024terabox.com/s/108ZGHCww19zCU7iux9tuxA",
         "password": "7878",
+        "warning": md("🚨 STRICT WARNING — SINGLE USER ONLY 🚨"),
     },
     "frontend_design": {
         "title": "Frontend Design",
         "access_link": "https://1024terabox.com/s/1NPgtKbO_bWzP1SpNJWa0Lw",
         "password": "7878",
+        "warning": md("🚨 STRICT WARNING — SINGLE USER ONLY 🚨"),
     },
 }
 
@@ -142,12 +147,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         info = COURSE_LINKS[course_key]
         price = next(v["price"] for v in COURSE_CONFIG.values() if v["link_key"] == course_key)
 
+        # UPDATED CLEAN PROFESSIONAL FORMAT
         msg = (
             "🚨 *ACCESS ONLY* 🚨\n"
             "This link is for *one user only*.\n"
-            "If it is shared, forwarded, or accessed by multiple people,\n"
-            "your access will be permanently revoked without notice.\n\n"
-            "*DO NOT* forward, repost, or share this link under any circumstances.\n\n"
+            "If it is shared, forwarded, or accessed by multiple people, your access will be permanently revoked without notice.\n"
+            "DO NOT forward, repost, or share this link under any circumstances.\n\n"
             f"📌 *Title:* {md(info['title'])}\n"
             f"🔗 *Access Link:* {md(info['access_link'])}\n"
             f"🔐 *Password:* {md(info['password'])}\n\n"
@@ -171,14 +176,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _, target_id_str, course_key = data.split(":", 2)
         target_id = int(target_id_str)
 
-        warn = (
-            "⚠️ Payment could not be verified.\n"
-            "Please restart using /start"
-        )
+        warn = "⚠️ Payment could not be verified\\. Please restart using /start"
 
         await context.bot.send_message(
             chat_id=target_id,
             text=warn,
+            parse_mode="MarkdownV2",
         )
 
         await query.message.reply_text(
@@ -193,7 +196,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not course_key:
             await context.bot.send_message(
                 chat_id=user_id,
-                text="⚠️ No course selected. Use /start",
+                text="⚠️ No course selected\\. Use /start",
+                parse_mode="MarkdownV2",
             )
             return
 
@@ -201,7 +205,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await context.bot.send_message(
             chat_id=user_id,
-            text="📸 Send your payment screenshot now.",
+            text="📸 Send your payment screenshot now\\.",
+            parse_mode="MarkdownV2",
         )
         return
 
@@ -216,7 +221,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state[user_id] = STATE_COURSE_SELECTED
 
         course_text = (
-            f"🔥 *You selected:* {md(cfg['label'])} (₹{cfg['price']})\n\n"
+            f"🔥 *You selected:* {md(cfg['label'])} \\(₹{cfg['price']}\\)\\n\\n"
             f"💸 *Pay to UPI:* `{md(UPI_ID)}`"
         )
 
@@ -246,7 +251,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Fallback
     await context.bot.send_message(
         chat_id=user_id,
-        text="❌ Unknown option. Use /start",
+        text="❌ Unknown option\\. Use /start",
+        parse_mode="MarkdownV2",
     )
 
 
@@ -259,7 +265,8 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user_state.get(user_id) != STATE_WAITING_SCREENSHOT:
         await update.message.reply_text(
-            "❌ Unexpected photo. Use /start",
+            "❌ Unexpected photo\\. Use /start",
+            parse_mode="MarkdownV2",
         )
         return
 
@@ -273,13 +280,13 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = md(f"@{user.username}" if user.username else "N/A")
 
     admin_caption = (
-        "🧾 *New Payment Request*\n\n"
-        f"👤 *Name:* {md(user.first_name)}\n"
-        f"🆔 *ID:* `{user_id}`\n"
-        f"📧 *Username:* {username}\n\n"
-        f"📚 *Course:* {md(label)}\n"
-        f"💰 *Amount:* ₹{price}\n\n"
-        f"💬 *Caption:*\n{caption}"
+        "🧾 *New Payment Request*\\n\\n"
+        f"👤 *Name:* {md(user.first_name)}\\n"
+        f"🆔 *ID:* `{user_id}`\\n"
+        f"📧 *Username:* {username}\\n\\n"
+        f"📚 *Course:* {md(label)}\\n"
+        f"💰 *Amount:* ₹{price}\\n\\n"
+        f"💬 *Caption:*\\n{caption}"
     )
 
     approve = f"admin_approve:{user_id}:{course_key}"
@@ -301,7 +308,8 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(
-        "✅ Screenshot sent to admin. You’ll get access soon.",
+        "✅ Screenshot sent to admin\\. You’ll get access soon\\.",
+        parse_mode="MarkdownV2",
     )
 
     user_state[user_id] = STATE_UNDER_REVIEW
@@ -312,7 +320,8 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===========================
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Unknown command. Use /start",
+        "Unknown command\\. Use /start",
+        parse_mode="MarkdownV2",
     )
 
 
