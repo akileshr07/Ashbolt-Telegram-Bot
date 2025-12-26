@@ -20,7 +20,7 @@ from telegram.helpers import escape_markdown
 # ----------------- Config -----------------
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID") or 0)
-UPI_ID = os.environ.get("UPI_ID") or "6382344469@jio"
+UPI_ID = os.environ.get("UPI_ID") or "akilesh.5@superyes"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN") or "CHANGE_ME_SECRET"
 
@@ -95,7 +95,7 @@ COURSE_CONFIG = {
     "buy_bundle": {"label": "All four bundle", "price": 149, "link_key": "all_four"},
 }
 
-QR_IMAGE_URL = "https://i.postimg.cc/3N67GnpM/qr.jpg"
+QR_IMAGE_URL = "https://i.postimg.cc/7LxDZLSW/Whats-App-Image-2025-12-26-at-9-28-51-PM.jpg"
 
 
 # ===========================
