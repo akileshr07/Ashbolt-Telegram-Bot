@@ -83,7 +83,8 @@ BTN_LABEL_DSA = "1. Namaste DSA ₹69"
 BTN_LABEL_REACT = "2. Namaste React ₹39"
 BTN_LABEL_NODE = "3. Namaste Node.js ₹39"
 BTN_LABEL_SD = "4. Namaste Frontend SD ₹39"
-BTN_LABEL_BUNDLE = "5. All four bundle ₹149"
+BTN_LABEL_AI = "5. 🔥 Namaste AI ₹89"
+BTN_LABEL_BUNDLE = "6. All five bundle ₹249"
 BTN_LABEL_SUBMIT_SCREENSHOT = "📤 Submit Screenshot"
 BTN_LABEL_APPROVE = "✅ Approve"
 BTN_LABEL_REJECT = "❌ Reject"
@@ -93,6 +94,7 @@ CB_BUY_DSA = "buy_dsa"
 CB_BUY_REACT = "buy_react"
 CB_BUY_NODE = "buy_nodejs"
 CB_BUY_FRONTEND_SD = "buy_frontend_sd"
+CB_BUY_AI = "buy_ai"
 CB_BUY_BUNDLE = "buy_bundle"
 CB_SUBMIT_SCREENSHOT = "submit_screenshot"
 CB_PREFIX_APPROVE = "admin_approve:"
@@ -112,11 +114,6 @@ COURSE_LINKS = {
         "access_link": "https://1024terabox.com/s/1bSAi4kTZNr_3vU8dw6beWA",
         "password": "7878",
     },
-    "all_four": {
-        "title": "All Four Courses",
-        "access_link": "https://1024terabox.com/s/1S0ilCkU2M2gvNAeaL_2aHw",
-        "password": "7878",
-    },
     "nodejs": {
         "title": "Node JS",
         "access_link": "https://1024terabox.com/s/108ZGHCww19zCU7iux9tuxA",
@@ -126,6 +123,16 @@ COURSE_LINKS = {
         "title": "Frontend Design",
         "access_link": "https://1024terabox.com/s/1NPgtKbO_bWzP1SpNJWa0Lw",
         "password": "7878",
+    },
+    "ai": {
+        "title": "Namaste AI",
+        "access_link": "YOUR_NAMASTE_AI_LINK_HERE",
+        "password": "YOUR_NAMASTE_AI_PASSWORD_HERE",
+    },
+    "all_five": {
+        "title": "All Five Courses",
+        "access_link": "YOUR_ALL_FIVE_BUNDLE_LINK_HERE",
+        "password": "YOUR_ALL_FIVE_BUNDLE_PASSWORD_HERE",
     },
 }
 
@@ -150,10 +157,15 @@ COURSE_CONFIG = {
         "price": 39,
         "link_key": "frontend_design",
     },
+    CB_BUY_AI: {
+        "label": "Namaste AI",
+        "price": 89,
+        "link_key": "ai",
+    },
     CB_BUY_BUNDLE: {
-        "label": "All four bundle",
-        "price": 149,
-        "link_key": "all_four",
+        "label": "All five bundle",
+        "price": 249,
+        "link_key": "all_five",
     },
 }
 
@@ -188,6 +200,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(BTN_LABEL_REACT, callback_data=CB_BUY_REACT)],
         [InlineKeyboardButton(BTN_LABEL_NODE, callback_data=CB_BUY_NODE)],
         [InlineKeyboardButton(BTN_LABEL_SD, callback_data=CB_BUY_FRONTEND_SD)],
+        [InlineKeyboardButton(BTN_LABEL_AI, callback_data=CB_BUY_AI)],
         [InlineKeyboardButton(BTN_LABEL_BUNDLE, callback_data=CB_BUY_BUNDLE)],
     ]
 
