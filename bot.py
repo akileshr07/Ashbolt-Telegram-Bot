@@ -130,9 +130,8 @@ COURSE_LINKS = {
         "password": "8787",
     },
     "all_five": {
-        "title": "All Five Courses",
-        "access_link": "YOUR_ALL_FIVE_BUNDLE_LINK_HERE",
-        "password": "YOUR_ALL_FIVE_BUNDLE_PASSWORD_HERE",
+        "title": "All Five Courses Bundle",
+        "courses": ["dsa", "react", "nodejs", "frontend_design", "ai"],
     },
 }
 
@@ -242,19 +241,41 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if cfg["link_key"] == course_key
         )
 
-        msg = MSG_USER_ACCESS_GRANTED_HTML.format(
-            title=info["title"],
-            price=price,
-            access_link=info["access_link"],
-            password=info["password"],
-        )
+        if course_key == "all_five":
+            # Send each course link one by one
+            bundle_courses = info.get("courses", [])
+            for key in bundle_courses:
+                course_item = COURSE_LINKS.get(key)
+                if not course_item:
+                    continue
 
-        await context.bot.send_message(
-            chat_id=target_id,
-            text=msg,
-            parse_mode="HTML",
-            disable_web_page_preview=True,
-        )
+                msg = MSG_USER_ACCESS_GRANTED_HTML.format(
+                    title=course_item["title"],
+                    price=price,
+                    access_link=course_item["access_link"],
+                    password=course_item["password"],
+                )
+
+                await context.bot.send_message(
+                    chat_id=target_id,
+                    text=msg,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                )
+        else:
+            msg = MSG_USER_ACCESS_GRANTED_HTML.format(
+                title=info["title"],
+                price=price,
+                access_link=info["access_link"],
+                password=info["password"],
+            )
+
+            await context.bot.send_message(
+                chat_id=target_id,
+                text=msg,
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
 
         await query.message.reply_text(
             text=MSG_ADMIN_APPROVED_LOG.format(target_id=target_id),
