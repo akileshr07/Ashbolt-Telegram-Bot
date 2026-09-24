@@ -126,8 +126,8 @@ COURSE_LINKS = {
     },
     "ai": {
         "title": "Namaste AI",
-        "access_link": "YOUR_NAMASTE_AI_LINK_HERE",
-        "password": "YOUR_NAMASTE_AI_PASSWORD_HERE",
+        "access_link": "https://1024terabox.com/s/1z9qtIwLkA5rJGkmI0LZgsA",
+        "password": "8787",
     },
     "all_five": {
         "title": "All Five Courses",
