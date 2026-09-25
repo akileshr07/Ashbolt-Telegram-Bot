@@ -21,7 +21,7 @@ from telegram.helpers import escape_markdown
 # ==============================================================================
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID") or 0)
-UPI_ID = os.environ.get("UPI_ID") or "akilesh.5@superyes"
+UPI_ID = os.environ.get("UPI_ID") or "ashboltbot@jio"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN") or "CHANGE_ME_SECRET"
 QR_IMAGE_URL = "https://ibb.co/dwQDbPgN"
