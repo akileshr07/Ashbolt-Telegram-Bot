@@ -29,7 +29,7 @@ WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN") or "CHANGE_ME_SECR
 QR_IMAGE_URL = "https://ibb.co/dwQDbPgN"
 
 # Paste your deployed Google Apps Script URL here or pass via env
-GOOGLE_SHEET_WEBHOOK_URL = os.environ.get("GOOGLE_SHEET_WEBHOOK_URL") or "https://script.google.com/macros/s/AKfycbw0cqTMLzYYU_ybrdYLZcFJOqrOtgVO_FznXDC6s25GtGRBv36Zti3MAl5bA9O80Rg-/exec"
+GOOGLE_SHEET_WEBHOOK_URL = os.environ.get("GOOGLE_SHEET_WEBHOOK_URL") or "YOUR_GOOGLE_APPS_SCRIPT_URL_HERE"
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN not set in environment")
