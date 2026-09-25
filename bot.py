@@ -24,7 +24,7 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID") or 0)
 UPI_ID = os.environ.get("UPI_ID") or "akilesh.5@superyes"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN") or "CHANGE_ME_SECRET"
-QR_IMAGE_URL = "https://i.postimg.cc/PqVgTYYS/w.jpg"
+QR_IMAGE_URL = "https://ibb.co/dwQDbPgN"
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN not set in environment")
