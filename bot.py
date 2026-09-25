@@ -28,8 +28,7 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN") or "CHANGE_ME_SECRET"
 QR_IMAGE_URL = "https://ibb.co/dwQDbPgN"
 
-# Paste your deployed Google Apps Script URL here or pass via env
-GOOGLE_SHEET_WEBHOOK_URL = os.environ.get("GOOGLE_SHEET_WEBHOOK_URL") or "YOUR_GOOGLE_APPS_SCRIPT_URL_HERE"
+GOOGLE_SHEET_WEBHOOK_URL = os.environ.get("GOOGLE_SHEET_WEBHOOK_URL", "").strip()
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN not set in environment")
@@ -37,12 +36,15 @@ if not BOT_TOKEN:
 # ==============================================================================
 # ANALYTICS LOGGER (NON-BLOCKING)
 # ==============================================================================
+http_client = httpx.AsyncClient(timeout=10.0, follow_redirects=True)
+
 async def _send_sheet_post(payload: dict):
-    if not GOOGLE_SHEET_WEBHOOK_URL or "YOUR_GOOGLE_APPS_SCRIPT_URL_HERE" in GOOGLE_SHEET_WEBHOOK_URL:
+    if not GOOGLE_SHEET_WEBHOOK_URL or "YOUR_GOOGLE_APPS_SCRIPT" in GOOGLE_SHEET_WEBHOOK_URL:
         return
     try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-            await client.post(GOOGLE_SHEET_WEBHOOK_URL, json=payload)
+        response = await http_client.post(GOOGLE_SHEET_WEBHOOK_URL, json=payload)
+        if response.status_code >= 400:
+            logging.getLogger(__name__).warning("Google Sheet HTTP Error: %s", response.status_code)
     except Exception as err:
         logging.getLogger(__name__).warning("Failed to log to Google Sheets: %s", err)
 
@@ -61,11 +63,9 @@ def log_to_sheet(user_id, username, name, step, course="", price=""):
 # ==============================================================================
 # USER & ADMIN TEXT TEMPLATES / CONSTANTS
 # ==============================================================================
-# Helpers
 def md(text: str) -> str:
     return escape_markdown(str(text), version=2)
 
-# Command & Notification Strings (MarkdownV2 formatted)
 MSG_WELCOME = "👋 Welcome to AshBolt Bot, {name}\\!\n\nSelect a course below:"
 MSG_COURSE_INFO = "🔥 *You selected:* {label} \\(₹{price}\\)\n\n💸 *Pay to UPI:* `{upi}`"
 MSG_SCAN_QR_CAPTION = "📷 Scan to pay ₹{price}"
@@ -77,7 +77,6 @@ MSG_ERR_UNEXPECTED_PHOTO = "❌ Unexpected photo\\. Use /start"
 MSG_ERR_UNKNOWN_OPTION = "❌ Unknown option\\. Use /start"
 MSG_ERR_UNKNOWN_COMMAND = "Unknown command\\. Use /start"
 
-# Admin Notifications & Responses
 MSG_ADMIN_REJECT_USER = "⚠️ Payment could not be verified\\. Please restart using /start"
 MSG_ADMIN_APPROVED_LOG = "✅ Access sent to user `{target_id}`"
 MSG_ADMIN_REJECTED_LOG = "❌ Rejected user `{target_id}`"
@@ -93,7 +92,6 @@ ADMIN_SCREENSHOT_CAPTION_TEMPLATE = (
     "💬 *Caption:*\n{caption}"
 )
 
-# User Access Delivery Message (HTML formatted)
 MSG_USER_ACCESS_GRANTED_HTML = (
     "🚨 <b>ACCESS ONLY</b> 🚨\n"
     "This link is for <b>one user only</b>.\n"
@@ -107,7 +105,6 @@ MSG_USER_ACCESS_GRANTED_HTML = (
     "— Confidential material. Sharing = <b>immediate termination</b> of access."
 )
 
-# Button Labels
 BTN_LABEL_DSA = "1. Namaste DSA ₹69"
 BTN_LABEL_REACT = "2. Namaste React ₹39"
 BTN_LABEL_NODE = "3. Namaste Node.js ₹39"
@@ -118,7 +115,6 @@ BTN_LABEL_SUBMIT_SCREENSHOT = "📤 Submit Screenshot"
 BTN_LABEL_APPROVE = "✅ Approve"
 BTN_LABEL_REJECT = "❌ Reject"
 
-# Callback Action Identifiers
 CB_BUY_DSA = "buy_dsa"
 CB_BUY_REACT = "buy_react"
 CB_BUY_NODE = "buy_nodejs"
@@ -223,7 +219,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     user_id = user.id
 
-    # LOG: User started the bot
     log_to_sheet(user_id, user.username, user.first_name, "STARTED_BOT")
 
     keyboard = [
@@ -308,8 +303,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 disable_web_page_preview=True,
             )
 
-        # LOG: Admin approved access
-        log_to_sheet(target_id, "", "", "PAYMENT_APPROVED", course_key, price)
+        log_to_sheet(target_id, "N/A", "Customer", "PAYMENT_APPROVED", course_key, price)
 
         await query.message.reply_text(
             text=MSG_ADMIN_APPROVED_LOG.format(target_id=target_id),
@@ -322,8 +316,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _, target_id_str, course_key = data.split(":", 2)
         target_id = int(target_id_str)
 
-        # LOG: Admin rejected
-        log_to_sheet(target_id, "", "", "PAYMENT_REJECTED", course_key, "")
+        log_to_sheet(target_id, "N/A", "Customer", "PAYMENT_REJECTED", course_key, "")
 
         await context.bot.send_message(
             chat_id=target_id,
@@ -350,7 +343,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_state[user_id] = STATE_WAITING_SCREENSHOT
 
-        # LOG: User clicked submit screenshot button
         log_to_sheet(
             user_id, 
             user.username, 
@@ -377,7 +369,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_state[user_id] = STATE_COURSE_SELECTED
 
-        # LOG: User checked price & QR
         log_to_sheet(
             user_id, 
             user.username, 
@@ -416,7 +407,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # ---------------------- FALLBACK ----------------------
     await context.bot.send_message(
         chat_id=user_id,
         text=MSG_ERR_UNKNOWN_OPTION,
@@ -439,7 +429,6 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     price = context.user_data.get("price")
     label = context.user_data.get("course_label")
 
-    # LOG: Screenshot uploaded by user
     log_to_sheet(user_id, user.username, user.first_name, "SCREENSHOT_SUBMITTED", course_key, price)
 
     photo_id = update.message.photo[-1].file_id
@@ -529,3 +518,4 @@ async def on_startup():
 async def on_shutdown():
     await bot_app.stop()
     await bot_app.shutdown()
+    await http_client.aclose()
