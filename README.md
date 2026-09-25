@@ -2,7 +2,7 @@
 
 ---
 
-## 🔰 Overview
+##Overview
 
 This bot is designed to automate the sale and delivery of the Namaste React Course for a one-time fee of ₹29. It ensures fair promotion and manual payment verification by forwarding user receipts to the admin before giving access.
 
@@ -122,6 +122,12 @@ For any help, user can reach out to admin:
 * Telegram: `@iam_akilesh07`
 
 ---
+WEB APP URL
+https://script.google.com/macros/s/AKfycbw0cqTMLzYYU_ybrdYLZcFJOqrOtgVO_FznXDC6s25GtGRBv36Zti3MAl5bA9O80Rg-/exec
+
+id
+AKfycbw0cqTMLzYYU_ybrdYLZcFJOqrOtgVO_FznXDC6s25GtGRBv36Zti3MAl5bA9O80Rg-
+
 
 
 
