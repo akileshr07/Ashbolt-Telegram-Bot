@@ -1,5 +1,7 @@
 import os
 import logging
+import asyncio
+import httpx
 from fastapi import FastAPI, Request, HTTPException
 from telegram import (
     Update,
@@ -26,8 +28,35 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN") or "CHANGE_ME_SECRET"
 QR_IMAGE_URL = "https://ibb.co/dwQDbPgN"
 
+# Paste your deployed Google Apps Script URL here or pass via env
+GOOGLE_SHEET_WEBHOOK_URL = os.environ.get("GOOGLE_SHEET_WEBHOOK_URL") or "https://script.google.com/macros/s/AKfycbw0cqTMLzYYU_ybrdYLZcFJOqrOtgVO_FznXDC6s25GtGRBv36Zti3MAl5bA9O80Rg-/exec"
+
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN not set in environment")
+
+# ==============================================================================
+# ANALYTICS LOGGER (NON-BLOCKING)
+# ==============================================================================
+async def _send_sheet_post(payload: dict):
+    if not GOOGLE_SHEET_WEBHOOK_URL or "YOUR_GOOGLE_APPS_SCRIPT_URL_HERE" in GOOGLE_SHEET_WEBHOOK_URL:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            await client.post(GOOGLE_SHEET_WEBHOOK_URL, json=payload)
+    except Exception as err:
+        logging.getLogger(__name__).warning("Failed to log to Google Sheets: %s", err)
+
+def log_to_sheet(user_id, username, name, step, course="", price=""):
+    """Schedules sheet logging in background without delaying bot replies."""
+    payload = {
+        "user_id": str(user_id),
+        "username": username or "N/A",
+        "name": name or "Unknown",
+        "step": step,
+        "course": course,
+        "price": str(price),
+    }
+    asyncio.create_task(_send_sheet_post(payload))
 
 # ==============================================================================
 # USER & ADMIN TEXT TEMPLATES / CONSTANTS
@@ -194,6 +223,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     user_id = user.id
 
+    # LOG: User started the bot
+    log_to_sheet(user_id, user.username, user.first_name, "STARTED_BOT")
+
     keyboard = [
         [InlineKeyboardButton(BTN_LABEL_DSA, callback_data=CB_BUY_DSA)],
         [InlineKeyboardButton(BTN_LABEL_REACT, callback_data=CB_BUY_REACT)],
@@ -242,7 +274,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         if course_key == "all_five":
-            # Send each course link one by one
             bundle_courses = info.get("courses", [])
             for key in bundle_courses:
                 course_item = COURSE_LINKS.get(key)
@@ -277,6 +308,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 disable_web_page_preview=True,
             )
 
+        # LOG: Admin approved access
+        log_to_sheet(target_id, "", "", "PAYMENT_APPROVED", course_key, price)
+
         await query.message.reply_text(
             text=MSG_ADMIN_APPROVED_LOG.format(target_id=target_id),
             parse_mode="MarkdownV2",
@@ -287,6 +321,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id == ADMIN_ID and data.startswith(CB_PREFIX_REJECT):
         _, target_id_str, course_key = data.split(":", 2)
         target_id = int(target_id_str)
+
+        # LOG: Admin rejected
+        log_to_sheet(target_id, "", "", "PAYMENT_REJECTED", course_key, "")
 
         await context.bot.send_message(
             chat_id=target_id,
@@ -313,6 +350,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_state[user_id] = STATE_WAITING_SCREENSHOT
 
+        # LOG: User clicked submit screenshot button
+        log_to_sheet(
+            user_id, 
+            user.username, 
+            user.first_name, 
+            "CLICKED_SUBMIT_SCREENSHOT", 
+            course_key, 
+            context.user_data.get("price", "")
+        )
+
         await context.bot.send_message(
             chat_id=user_id,
             text=MSG_PROMPT_SCREENSHOT,
@@ -329,6 +376,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["price"] = cfg["price"]
 
         user_state[user_id] = STATE_COURSE_SELECTED
+
+        # LOG: User checked price & QR
+        log_to_sheet(
+            user_id, 
+            user.username, 
+            user.first_name, 
+            "VIEWED_PRICE", 
+            cfg["link_key"], 
+            cfg["price"]
+        )
 
         course_text = MSG_COURSE_INFO.format(
             label=md(cfg["label"]),
@@ -381,6 +438,9 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     course_key = context.user_data.get("course_key")
     price = context.user_data.get("price")
     label = context.user_data.get("course_label")
+
+    # LOG: Screenshot uploaded by user
+    log_to_sheet(user_id, user.username, user.first_name, "SCREENSHOT_SUBMITTED", course_key, price)
 
     photo_id = update.message.photo[-1].file_id
     caption = md(update.message.caption or "No caption")
