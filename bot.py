@@ -8,6 +8,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
+from telegram.constants import ChatMemberStatus
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -27,6 +28,12 @@ UPI_ID = os.environ.get("UPI_ID") or "ashboltbot@jio"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN") or "CHANGE_ME_SECRET"
 QR_IMAGE_URL = "https://ibb.co/dwQDbPgN"
+
+# Mandatory Channel Config
+REQUIRED_CHANNEL_INVITE = "https://t.me/+ym4RnZoNubI1ZGE1"
+# Set your channel ID here (Private channels usually start with -100...)
+# e.g., os.environ.get("REQUIRED_CHANNEL_ID") or -1001234567890
+REQUIRED_CHANNEL_ID = os.environ.get("REQUIRED_CHANNEL_ID")
 
 GOOGLE_SHEET_WEBHOOK_URL = os.environ.get("GOOGLE_SHEET_WEBHOOK_URL", "").strip()
 
@@ -72,6 +79,15 @@ MSG_SCAN_QR_CAPTION = "📷 Scan to pay ₹{price}"
 MSG_AFTER_PAYMENT_PROMPT = "After payment, click below:"
 MSG_PROMPT_SCREENSHOT = "📸 Send your payment screenshot now\\."
 MSG_SCREENSHOT_RECEIVED = "✅ Screenshot sent to admin\\. You’ll get access soon\\."
+
+MSG_FORCE_JOIN = (
+    "⚠️️ *Mandatory Step: Join Our Channel*\n\n"
+    "To proceed with verification and receive your course updates, "
+    "you *must* join our channel below\\.\n\n"
+    "After joining, click *Check Membership*\\."
+)
+MSG_NOT_JOINED_YET = "❌ You haven't joined the channel yet! Please join to proceed."
+
 MSG_ERR_NO_COURSE = "⚠️ No course selected\\. Use /start"
 MSG_ERR_UNEXPECTED_PHOTO = "❌ Unexpected photo\\. Use /start"
 MSG_ERR_UNKNOWN_OPTION = "❌ Unknown option\\. Use /start"
@@ -114,6 +130,8 @@ BTN_LABEL_BUNDLE = "6. All five bundle ₹249"
 BTN_LABEL_SUBMIT_SCREENSHOT = "📤 Submit Screenshot"
 BTN_LABEL_APPROVE = "✅ Approve"
 BTN_LABEL_REJECT = "❌ Reject"
+BTN_LABEL_JOIN_CHANNEL = "📢 Join Official Channel"
+BTN_LABEL_VERIFY_JOIN = "✅ Check Membership"
 
 CB_BUY_DSA = "buy_dsa"
 CB_BUY_REACT = "buy_react"
@@ -122,6 +140,7 @@ CB_BUY_FRONTEND_SD = "buy_frontend_sd"
 CB_BUY_AI = "buy_ai"
 CB_BUY_BUNDLE = "buy_bundle"
 CB_SUBMIT_SCREENSHOT = "submit_screenshot"
+CB_CHECK_MEMBERSHIP = "check_channel_join"
 CB_PREFIX_APPROVE = "admin_approve:"
 CB_PREFIX_REJECT = "admin_reject:"
 
@@ -198,6 +217,7 @@ COURSE_CONFIG = {
 # ==============================================================================
 STATE_COURSE_SELECTED = "course_selected"
 STATE_WAITING_SCREENSHOT = "awaiting_payment_screenshot"
+STATE_AWAITING_CHANNEL_JOIN = "awaiting_channel_join"
 STATE_UNDER_REVIEW = "payment_under_review"
 
 user_state = {}
@@ -210,6 +230,67 @@ logger = logging.getLogger(__name__)
 
 fastapi_app = FastAPI()
 bot_app = Application.builder().token(BOT_TOKEN).build()
+
+
+# ==============================================================================
+# HELPER FUNCTIONS
+# ==============================================================================
+async def is_user_in_channel(bot, user_id: int) -> bool:
+    """Verifies if the user is a member/admin/owner of the required channel."""
+    if not REQUIRED_CHANNEL_ID:
+        # If no channel ID is configured, bypass check to avoid broken workflows
+        return True
+    try:
+        member = await bot.get_chat_member(chat_id=REQUIRED_CHANNEL_ID, user_id=user_id)
+        return member.status in [
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        ]
+    except Exception as err:
+        logger.error("Error checking channel membership for user %s: %s", user_id, err)
+        return False
+
+
+async def forward_screenshot_to_admin(context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    """Sends user payment request to admin once membership check is complete."""
+    u_data = context.user_data
+    photo_id = u_data.get("screenshot_photo_id")
+    caption = u_data.get("screenshot_caption", "No caption")
+    username = u_data.get("username", "N/A")
+    name = u_data.get("first_name", "Unknown")
+    label = u_data.get("course_label", "")
+    price = u_data.get("price", "")
+    course_key = u_data.get("course_key", "")
+
+    admin_caption = ADMIN_SCREENSHOT_CAPTION_TEMPLATE.format(
+        name=md(name),
+        user_id=user_id,
+        username=md(username),
+        course_label=md(label),
+        price=price,
+        caption=md(caption),
+    )
+
+    approve_callback = f"{CB_PREFIX_APPROVE}{user_id}:{course_key}"
+    reject_callback = f"{CB_PREFIX_REJECT}{user_id}:{course_key}"
+
+    review_buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(BTN_LABEL_APPROVE, callback_data=approve_callback),
+                InlineKeyboardButton(BTN_LABEL_REJECT, callback_data=reject_callback),
+            ]
+        ]
+    )
+
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=photo_id,
+        caption=admin_caption,
+        parse_mode="MarkdownV2",
+        reply_markup=review_buttons,
+    )
 
 
 # ==============================================================================
@@ -344,17 +425,43 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state[user_id] = STATE_WAITING_SCREENSHOT
 
         log_to_sheet(
-            user_id, 
-            user.username, 
-            user.first_name, 
-            "CLICKED_SUBMIT_SCREENSHOT", 
-            course_key, 
+            user_id,
+            user.username,
+            user.first_name,
+            "CLICKED_SUBMIT_SCREENSHOT",
+            course_key,
             context.user_data.get("price", "")
         )
 
         await context.bot.send_message(
             chat_id=user_id,
             text=MSG_PROMPT_SCREENSHOT,
+            parse_mode="MarkdownV2",
+        )
+        return
+
+    # ------------------ CHANNEL MEMBERSHIP VERIFY ------------------
+    if data == CB_CHECK_MEMBERSHIP:
+        joined = await is_user_in_channel(context.bot, user_id)
+        if not joined:
+            await query.answer(text="⚠️ You have not joined yet! Join first.", show_alert=True)
+            return
+
+        # Success - User joined! Forward the screenshot to admin
+        await forward_screenshot_to_admin(context, user_id)
+        user_state[user_id] = STATE_UNDER_REVIEW
+
+        log_to_sheet(
+            user_id,
+            user.username,
+            user.first_name,
+            "JOINED_CHANNEL_AND_VERIFIED",
+            context.user_data.get("course_key", ""),
+            context.user_data.get("price", "")
+        )
+
+        await query.edit_message_text(
+            text="🎉 *Verification successful\\!*\n\nYour screenshot has been forwarded to the admin\\. You'll get access soon\\.",
             parse_mode="MarkdownV2",
         )
         return
@@ -370,11 +477,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state[user_id] = STATE_COURSE_SELECTED
 
         log_to_sheet(
-            user_id, 
-            user.username, 
-            user.first_name, 
-            "VIEWED_PRICE", 
-            cfg["link_key"], 
+            user_id,
+            user.username,
+            user.first_name,
+            "VIEWED_PRICE",
+            cfg["link_key"],
             cfg["price"]
         )
 
@@ -427,49 +534,41 @@ async def handle_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     course_key = context.user_data.get("course_key")
     price = context.user_data.get("price")
-    label = context.user_data.get("course_label")
 
     log_to_sheet(user_id, user.username, user.first_name, "SCREENSHOT_SUBMITTED", course_key, price)
 
-    photo_id = update.message.photo[-1].file_id
-    caption = md(update.message.caption or "No caption")
-    username = md(f"@{user.username}" if user.username else "N/A")
+    # Save photo information in user_data
+    context.user_data["screenshot_photo_id"] = update.message.photo[-1].file_id
+    context.user_data["screenshot_caption"] = update.message.caption or "No caption"
+    context.user_data["username"] = f"@{user.username}" if user.username else "N/A"
+    context.user_data["first_name"] = user.first_name
 
-    admin_caption = ADMIN_SCREENSHOT_CAPTION_TEMPLATE.format(
-        name=md(user.first_name),
-        user_id=user_id,
-        username=username,
-        course_label=md(label),
-        price=price,
-        caption=caption,
-    )
-
-    approve_callback = f"{CB_PREFIX_APPROVE}{user_id}:{course_key}"
-    reject_callback = f"{CB_PREFIX_REJECT}{user_id}:{course_key}"
-
-    review_buttons = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(BTN_LABEL_APPROVE, callback_data=approve_callback),
-                InlineKeyboardButton(BTN_LABEL_REJECT, callback_data=reject_callback),
-            ]
-        ]
-    )
-
-    await context.bot.send_photo(
-        chat_id=ADMIN_ID,
-        photo=photo_id,
-        caption=admin_caption,
-        parse_mode="MarkdownV2",
-        reply_markup=review_buttons,
-    )
-
+    # 1. Send the screenshot received message
     await update.message.reply_text(
         text=MSG_SCREENSHOT_RECEIVED,
         parse_mode="MarkdownV2",
     )
 
-    user_state[user_id] = STATE_UNDER_REVIEW
+    # 2. Check if user is already in channel
+    is_member = await is_user_in_channel(context.bot, user_id)
+    if is_member:
+        # If already joined, immediately forward to admin
+        await forward_screenshot_to_admin(context, user_id)
+        user_state[user_id] = STATE_UNDER_REVIEW
+    else:
+        # User has NOT joined: Lock progression and show mandatory join prompt
+        user_state[user_id] = STATE_AWAITING_CHANNEL_JOIN
+        channel_gate_buttons = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton(BTN_LABEL_JOIN_CHANNEL, url=REQUIRED_CHANNEL_INVITE)],
+                [InlineKeyboardButton(BTN_LABEL_VERIFY_JOIN, callback_data=CB_CHECK_MEMBERSHIP)],
+            ]
+        )
+        await update.message.reply_text(
+            text=MSG_FORCE_JOIN,
+            parse_mode="MarkdownV2",
+            reply_markup=channel_gate_buttons,
+        )
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
